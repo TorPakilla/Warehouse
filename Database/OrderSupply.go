@@ -1,0 +1,114 @@
+package Database
+
+import (
+	"Api/Models"
+
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
+)
+
+func AddOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+	type SupplyRequest struct {
+		Name         string  `json:"name"`
+		Description  string  `json:"description"`
+		Price        float64 `json:"price"`
+		Unit         int     `json:"unit"`
+		SupplierName string  `json:"supplier_name"`
+	}
+
+	var req SupplyRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid JSON format: " + err.Error(),
+		})
+	}
+
+	var supplier Models.Supplier
+	if err := db.Where("name = ?", req.SupplierName).First(&supplier).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Supplier not found",
+		})
+	}
+
+	supply := Models.OrderSupply{
+		Name:        req.Name,
+		Description: req.Description,
+		Price:       req.Price,
+		UnitBox:     req.Unit,
+		SupplierID:  supplier.ID,
+	}
+	if err := db.Create(&supply).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create supply: " + err.Error(),
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(supply)
+}
+
+func LookOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+	var supplies []Models.OrderSupply
+	if err := db.Find(&supplies).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to find supplies: " + err.Error(),
+		})
+	}
+	return c.JSON(fiber.Map{"This": "Supply", "Data": supplies})
+}
+
+func LookOrderSupplyById(db *gorm.DB, c *fiber.Ctx) error {
+	id := c.Params("id")
+	var supply Models.OrderSupply
+	if err := db.First(&supply, "id = ?", id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Supply not found",
+		})
+	}
+	return c.JSON(fiber.Map{"Supply": "ID", "Data": supply})
+}
+
+func DeleteOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+	id := c.Params("id")
+	var supply Models.OrderSupply
+	if err := db.First(&supply, "id = ?", id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Supply not found",
+		})
+	}
+
+	if err := db.Delete(&supply).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to delete supply: " + err.Error(),
+		})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func UpdateOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+	id := c.Params("id")
+	var supply Models.OrderSupply
+	if err := db.First(&supply, "id = ?", id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Supply not found",
+		})
+	}
+
+	var updateReq Models.OrderSupply
+	if err := c.BodyParser(&updateReq); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid JSON format: " + err.Error(),
+		})
+	}
+
+	supply.Name = updateReq.Name
+	supply.Description = updateReq.Description
+	supply.Price = updateReq.Price
+	supply.UnitBox = updateReq.UnitBox
+	supply.SupplierID = updateReq.SupplierID
+
+	if err := db.Save(&supply).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update supply: " + err.Error(),
+		})
+	}
+	return c.JSON(fiber.Map{"Supply": "Updated", "Data": supply})
+}

@@ -1,0 +1,87 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"strconv"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+func SupplyRoutes(app *fiber.App, db *gorm.DB) {
+
+	app.Post("/Supply", func(c *fiber.Ctx) error {
+		return OrderSupply(db, c)
+	})
+
+	app.Get("/Supply", func(c *fiber.Ctx) error {
+		return LookSupply(db, c)
+	})
+
+	app.Get("/Supply", func(c *fiber.Ctx) error {
+		return LookSupplyById(db, c)
+	})
+
+	app.Delete("/Supply", func(c *fiber.Ctx) error {
+		return DeleteSupply(db, c)
+	})
+
+	app.Put("/Supply", func(c *fiber.Ctx) error {
+		return UpdateSupply(db, c)
+	})
+
+}
+
+func SupplierRoutes(app *fiber.App, db *gorm.DB) {
+
+	app.Post("/Supplier", func(c *fiber.Ctx) error {
+		return AddSupplier(db, c)
+	})
+
+}
+
+func main() {
+	// Load environment variables
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+
+	// Load database configuration
+	host := os.Getenv("DB_HOST")
+	portStr := os.Getenv("DB_PORT")
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		log.Fatalf("Invalid DB_PORT: %v", err)
+	}
+
+	user := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASSWORD")
+	dbname := os.Getenv("DB_NAME")
+
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+
+	// Connect to the database
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	log.Println("Successfully connected to the database!")
+
+	db.AutoMigrate(&Supply{}, &Supplier{})
+
+	app := fiber.New()
+
+	SupplyRoutes(app, db)
+	SupplierRoutes(app, db)
+
+	log.Fatal(app.Listen(":5050"))
+
+}
