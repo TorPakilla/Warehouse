@@ -5,7 +5,58 @@ import (
 	"gorm.io/gorm"
 )
 
-type OrderSupply struct {
+type Users struct {
+	UserID   string   `gorm:"type:uuid;primaryKey" json:"userid"`
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	Name     string   `json:"name"`
+	Role     string   `json:"role"`
+	Branche  string   `gorm:"type:uuid;not null" json:"branche"`
+	Branches Branches `gorm:"foreignKey:Branche" json:"branches"`
+}
+
+func (Users) TableName() string {
+	return "Users"
+}
+
+func (s *Users) BeforeCreate(tx *gorm.DB) (err error) {
+	s.UserID = uuid.New().String()
+	return
+}
+
+type Branches struct {
+	BrancheID string  `gorm:"type:uuid;primaryKey" json:"id"`
+	BName     string  `json:"bname"`
+	Location  string  `json:"location"`
+	Branches  []Users `gorm:"foreignKey:BrancheID" json:"branche"`
+}
+
+func (Branches) TableName() string {
+	return "Branches"
+}
+
+func (s *Branches) BeforeCreate(tx *gorm.DB) (err error) {
+	s.BrancheID = uuid.New().String()
+	return
+}
+
+type Pallets struct {
+	PalletID string  `gorm:"type:uuid;primaryKey" json:"palletid"`
+	BName    string  `json:"bname"`
+	Location string  `json:"location"`
+	Branches []Users `gorm:"foreignKey:BrancheID" json:"branche"`
+}
+
+func (Branches) TableName() string {
+	return "Branches"
+}
+
+func (s *Branches) BeforeCreate(tx *gorm.DB) (err error) {
+	s.BrancheID = uuid.New().String()
+	return
+}
+
+type Supply struct {
 	ID          string   `gorm:"type:uuid;primaryKey" json:"id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
@@ -15,20 +66,20 @@ type OrderSupply struct {
 	Supplier    Supplier `gorm:"foreignKey:SupplierID" json:"supplier"`
 }
 
-func (OrderSupply) TableName() string {
-	return "OrderSupply"
+func (Supply) TableName() string {
+	return "Supply"
 }
 
-func (s *OrderSupply) BeforeCreate(tx *gorm.DB) (err error) {
+func (s *Supply) BeforeCreate(tx *gorm.DB) (err error) {
 	s.ID = uuid.New().String()
 	return
 }
 
 type Supplier struct {
-	ID          string        `gorm:"type:uuid;primaryKey" json:"id"`
-	Name        string        `gorm:"uniqueIndex;not null" json:"name"`
-	Description string        `json:"description"`
-	Supplies    []OrderSupply `gorm:"foreignKey:SupplierID" json:"supplies"`
+	ID          string   `gorm:"type:uuid;primaryKey" json:"id"`
+	Name        string   `gorm:"uniqueIndex;not null" json:"name"`
+	Description string   `json:"description"`
+	Supplies    []Supply `gorm:"foreignKey:SupplierID" json:"supplies"`
 }
 
 func (Supplier) TableName() string {

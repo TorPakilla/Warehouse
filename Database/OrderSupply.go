@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func AddOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+func AddSupply(db *gorm.DB, c *fiber.Ctx) error {
 	type SupplyRequest struct {
 		Name         string  `json:"name"`
 		Description  string  `json:"description"`
@@ -30,7 +30,7 @@ func AddOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
 		})
 	}
 
-	supply := Models.OrderSupply{
+	supply := Models.Supply{
 		Name:        req.Name,
 		Description: req.Description,
 		Price:       req.Price,
@@ -45,8 +45,8 @@ func AddOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(supply)
 }
 
-func LookOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
-	var supplies []Models.OrderSupply
+func LookSupply(db *gorm.DB, c *fiber.Ctx) error {
+	var supplies []Models.Supply
 	if err := db.Find(&supplies).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to find supplies: " + err.Error(),
@@ -55,9 +55,9 @@ func LookOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"This": "Supply", "Data": supplies})
 }
 
-func LookOrderSupplyById(db *gorm.DB, c *fiber.Ctx) error {
+func LookSupplyById(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
-	var supply Models.OrderSupply
+	var supply Models.Supply
 	if err := db.First(&supply, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Supply not found",
@@ -66,9 +66,9 @@ func LookOrderSupplyById(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"Supply": "ID", "Data": supply})
 }
 
-func DeleteOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+func DeleteSupply(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
-	var supply Models.OrderSupply
+	var supply Models.Supply
 	if err := db.First(&supply, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Supply not found",
@@ -83,16 +83,16 @@ func DeleteOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func UpdateOrderSupply(db *gorm.DB, c *fiber.Ctx) error {
+func UpdateSupply(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
-	var supply Models.OrderSupply
+	var supply Models.Supply
 	if err := db.First(&supply, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Supply not found",
 		})
 	}
 
-	var updateReq Models.OrderSupply
+	var updateReq Models.Supply
 	if err := c.BodyParser(&updateReq); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid JSON format: " + err.Error(),

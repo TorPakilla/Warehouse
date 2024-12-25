@@ -19,23 +19,23 @@ import (
 func SupplyRoutes(app *fiber.App, db *gorm.DB) {
 
 	app.Post("/Supply", func(c *fiber.Ctx) error {
-		return Database.AddOrderSupply(db, c)
+		return Database.AddSupply(db, c)
 	})
 
 	app.Get("/Supply", func(c *fiber.Ctx) error {
-		return Database.LookOrderSupply(db, c)
+		return Database.LookSupply(db, c)
 	})
 
 	app.Get("/Supply/:id", func(c *fiber.Ctx) error {
-		return Database.LookOrderSupplyById(db, c)
+		return Database.LookSupplyById(db, c)
 	})
 
 	app.Delete("/Supply", func(c *fiber.Ctx) error {
-		return Database.DeleteOrderSupply(db, c)
+		return Database.DeleteSupply(db, c)
 	})
 
 	app.Put("/Supply", func(c *fiber.Ctx) error {
-		return Database.UpdateOrderSupply(db, c)
+		return Database.UpdateSupply(db, c)
 	})
 }
 
@@ -66,7 +66,7 @@ func main() {
 		panic("failed to connect to database")
 	}
 
-	db.AutoMigrate(&Models.OrderSupply{}, &Models.Supplier{})
+	db.AutoMigrate(&Models.Supply{}, &Models.Supplier{})
 
 	app := fiber.New()
 	SupplyRoutes(app, db)
