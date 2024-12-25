@@ -1,4 +1,3 @@
-// filepath: /c:/Users/dY470g3/Desktop/ProjectWork/Warehouse/main.go
 package main
 
 import (
@@ -7,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"Api/Database"
+	"Api/Func"
 	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,36 +14,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
-
-func SupplyRoutes(app *fiber.App, db *gorm.DB) {
-
-	app.Post("/Supply", func(c *fiber.Ctx) error {
-		return Database.AddSupply(db, c)
-	})
-
-	app.Get("/Supply", func(c *fiber.Ctx) error {
-		return Database.LookSupply(db, c)
-	})
-
-	app.Get("/Supply/:id", func(c *fiber.Ctx) error {
-		return Database.LookSupplyById(db, c)
-	})
-
-	app.Delete("/Supply", func(c *fiber.Ctx) error {
-		return Database.DeleteSupply(db, c)
-	})
-
-	app.Put("/Supply", func(c *fiber.Ctx) error {
-		return Database.UpdateSupply(db, c)
-	})
-}
-
-func SupplierRoutes(app *fiber.App, db *gorm.DB) {
-
-	app.Post("/Supplier", func(c *fiber.Ctx) error {
-		return Database.AddSupplier(db, c)
-	})
-}
 
 func main() {
 	err := godotenv.Load()
@@ -66,11 +35,34 @@ func main() {
 		panic("failed to connect to database")
 	}
 
-	db.AutoMigrate(&Models.Supply{}, &Models.Supplier{})
+	// db.Migrator().DropTable(
+	// 	&Models.Emloyees{},
+	// 	&Models.Branches{},
+	// 	&Models.Product{},
+	// 	&Models.ProductUnit{},
+	// 	&Models.Inventory{},
+	// 	&Models.Supplier{},
+	// 	&Models.Order{},
+	// 	&Models.OrderItem{},
+	// 	&Models.Shipment{},
+	// 	&Models.ShipmentItem{},
+	// )
+
+	db.AutoMigrate(&Models.Emloyees{},
+		&Models.Branches{},
+		&Models.Product{},
+		&Models.ProductUnit{},
+		&Models.Inventory{},
+		&Models.Supplier{},
+		&Models.Order{},
+		&Models.OrderItem{},
+		&Models.Shipment{},
+		&Models.ShipmentItem{})
 
 	app := fiber.New()
-	SupplyRoutes(app, db)
-	SupplierRoutes(app, db)
+
+	Func.EmloyeesRoutes(app, db)
+	Func.BranchesRoutes(app, db)
 
 	log.Fatal(app.Listen(":5050"))
 }
