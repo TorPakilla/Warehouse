@@ -41,7 +41,7 @@ func LookBranches(db *gorm.DB, c *fiber.Ctx) error {
 func FindBranches(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var branche Models.Branches
-	if err := db.Where("id = ?", id).First(&branche).Error; err != nil {
+	if err := db.Where("branche_id = ?", id).First(&branche).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Branche not found"})
 	}
 
@@ -51,7 +51,7 @@ func FindBranches(db *gorm.DB, c *fiber.Ctx) error {
 func DeleteBranches(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var branche Models.Branches
-	if err := db.Where("id = ?", id).First(&branche).Error; err != nil {
+	if err := db.Where("branche_id = ?", id).First(&branche).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Branche not found"})
 	}
 
@@ -65,7 +65,7 @@ func DeleteBranches(db *gorm.DB, c *fiber.Ctx) error {
 func UpdateBranches(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var branche Models.Branches
-	if err := db.Where("id = ?", id).First(&branche).Error; err != nil {
+	if err := db.Where("branche_id = ?", id).First(&branche).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Branche not found"})
 	}
 
@@ -98,15 +98,15 @@ func BranchesRoutes(app *fiber.App, db *gorm.DB) {
 		return LookBranches(db, c)
 	})
 
-	app.Get("/Branches", func(c *fiber.Ctx) error {
+	app.Get("/Branches/:id", func(c *fiber.Ctx) error {
 		return FindBranches(db, c)
 	})
 
-	app.Delete("/Branches", func(c *fiber.Ctx) error {
+	app.Delete("/Branches/:id", func(c *fiber.Ctx) error {
 		return DeleteBranches(db, c)
 	})
 
-	app.Put("/Branches", func(c *fiber.Ctx) error {
+	app.Put("/Branches/:id", func(c *fiber.Ctx) error {
 		return UpdateBranches(db, c)
 	})
 }

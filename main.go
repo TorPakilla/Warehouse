@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// db.Migrator().DropTable(
-	// 	&Models.Emloyees{},
+	// 	&Models.Employees{},
 	// 	&Models.Branches{},
 	// 	&Models.Product{},
 	// 	&Models.ProductUnit{},
@@ -48,7 +48,7 @@ func main() {
 	// 	&Models.ShipmentItem{},
 	// )
 
-	db.AutoMigrate(&Models.Emloyees{},
+	db.AutoMigrate(&Models.Employees{},
 		&Models.Branches{},
 		&Models.Product{},
 		&Models.ProductUnit{},
@@ -61,9 +61,16 @@ func main() {
 
 	app := fiber.New()
 
-	Func.EmloyeesRoutes(app, db)
+	Func.EmployeesRoutes(app, db)
 	Func.BranchesRoutes(app, db)
 	Func.ProductRouter(app, db)
+	Func.ProductUnitRouter(app, db)
+	Func.InventoryRoutes(app, db)
+	Func.SupplierRoutes(app, db)
+	Func.OrderRoutes(app, db)
+	Func.OrderItemRoutes(app, db)
+	Func.ShipmentRoutes(app, db)
+	Func.ShipmentItemRoutes(app, db)
 
 	log.Fatal(app.Listen(":5050"))
 }

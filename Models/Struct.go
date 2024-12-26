@@ -1,36 +1,38 @@
 package Models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-type Emloyees struct {
-	EmloyeeID string    `gorm:"type:uuid;primaryKey" json:"emloyeeid"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	Name      string    `json:"name"`
-	Role      string    `json:"role"`
-	BrancheID string    `gorm:"type:uuid;foreignKey:BrancheID" json:"brancheid"`
-	Salary    float64   `json:"salary"`
-	CreatedAt uuid.Time `json:"createdat"`
+type Employees struct {
+	EmployeesID string    `gorm:"type:uuid;primaryKey" json:"employeesid"`
+	Username    string    `json:"username"`
+	Password    string    `json:"password"`
+	Name        string    `json:"name"`
+	Role        string    `json:"role"`
+	BrancheID   string    `gorm:"type:uuid;foreignKey:BrancheID" json:"brancheid"`
+	Salary      float64   `json:"salary"`
+	CreatedAt   time.Time `json:"createdat"`
 }
 
-func (Emloyees) TableName() string {
-	return "Emloyees"
+func (Employees) TableName() string {
+	return "Employees"
 }
 
-func (s *Emloyees) BeforeCreate(tx *gorm.DB) (err error) {
-	s.EmloyeeID = uuid.New().String()
+func (s *Employees) BeforeCreate(tx *gorm.DB) (err error) {
+	s.EmployeesID = uuid.New().String()
 	return
 }
 
 type Branches struct {
-	BrancheID string     `gorm:"type:uuid;primaryKey" json:"brancheid"`
-	BName     string     `json:"bname"`
-	Location  string     `json:"location"`
-	CreatedAt uuid.Time  `json:"createdat"`
-	Emloyees  []Emloyees `gorm:"foreignKey:BrancheID" json:"emloyees"`
+	BrancheID string      `gorm:"type:uuid;primaryKey" json:"brancheid"`
+	BName     string      `json:"bname"`
+	Location  string      `json:"location"`
+	CreatedAt time.Time   `json:"createdat"`
+	Employees []Employees `gorm:"foreignKey:BrancheID" json:"employees"`
 }
 
 func (Branches) TableName() string {
@@ -46,7 +48,7 @@ type Product struct {
 	ProductID   string    `gorm:"type:uuid;primaryKey" json:"productid"`
 	ProductName string    `json:"productname"`
 	Description string    `json:"description"`
-	CreatedAt   uuid.Time `json:"createdat"`
+	CreatedAt   time.Time `json:"createdat"`
 }
 
 func (Product) TableName() string {
@@ -59,10 +61,10 @@ func (s *Product) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type ProductUnit struct {
-	ProductUnitID string    `gorm:"type:uuid;primaryKey" json:"productunitid"`
-	ProductID     []Product `gorm:"foreignKey:ProductID" json:"productid"`
-	Type          string    `json:"type"`
-	ConversRate   int       `json:"conversrate"`
+	ProductUnitID string `gorm:"type:uuid;primaryKey" json:"productunitid"`
+	ProductID     string `gorm:"foreignKey:ProductID" json:"productid"`
+	Type          string `json:"type"`
+	ConversRate   *int   `json:"conversrate"`
 }
 
 func (ProductUnit) TableName() string {
@@ -75,12 +77,12 @@ func (s *ProductUnit) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type Inventory struct {
-	InventoryID   string        `gorm:"type:uuid;primaryKey" json:"inventoryid"`
-	ProductUnitID []ProductUnit `gorm:"foreignKey:ProductUnitID" json:"productunitid"`
-	BrancheID     string        `gorm:"type:uuid;foreignKey:BrancheID" json:"brancheid"`
-	Quantity      int           `json:"quantity"`
-	Price         float64       `json:"price"`
-	CreatedAt     uuid.Time     `json:"createdat"`
+	InventoryID   string    `gorm:"type:uuid;primaryKey" json:"inventoryid"`
+	ProductUnitID string    `gorm:"type:uuid;foreignKey:ProductUnitID" json:"productunitid"`
+	BrancheID     string    `gorm:"type:uuid;foreignKey:BrancheID" json:"brancheid"`
+	Quantity      int       `json:"quantity"`
+	Price         float64   `json:"price"`
+	CreatedAt     time.Time `json:"createdat"`
 }
 
 func (Inventory) TableName() string {
@@ -93,10 +95,10 @@ func (s *Inventory) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type Supplier struct {
-	SupplierID  string    `gorm:"type:uuid;primaryKey" json:"supplierid"`
-	Name        string    `json:"name"`
-	ProductID   []Product `gorm:"foreignKey:ProductID" json:"productid"`
-	PricePallet int       `json:"pricepallet"`
+	SupplierID  string  `gorm:"type:uuid;primaryKey" json:"supplierid"`
+	Name        string  `json:"name"`
+	ProductID   string  `gorm:"foreignKey:ProductID" json:"productid"`
+	PricePallet float64 `json:"pricepallet"`
 }
 
 func (Supplier) TableName() string {
@@ -111,13 +113,13 @@ func (s *Supplier) BeforeCreate(tx *gorm.DB) (err error) {
 type Order struct {
 	OrderID     string    `gorm:"type:uuid;primaryKey" json:"orderid"`
 	OrderNumber string    `json:"ordernumber"`
-	EmplyeeID   string    `gorm:"type:uuid;foreignKey:EmloyeeID" json:"emplyeeid"`
+	EmployeeID  string    `gorm:"type:uuid;foreignKey:EmployeesID" json:"employeeid"`
 	SupplierID  string    `gorm:"type:uuid;foreignKey:SupplierID" json:"supplierid"`
-	ReceiptDate uuid.Time `json:"receiptdate"`
+	ReceiptDate time.Time `json:"receiptdate"`
 	TotalAmount float64   `json:"totalamount"`
 	Status      string    `json:"status"`
-	CreatedAt   uuid.Time `json:"createdat"`
-	UpdateAt    uuid.Time `json:"updateat"`
+	CreatedAt   time.Time `json:"createdat"`
+	UpdateAt    time.Time `json:"updateat"`
 }
 
 func (Order) TableName() string {
@@ -135,8 +137,8 @@ type OrderItem struct {
 	ProductUnitID string    `gorm:"type:uuid;foreignKey:ProductUnitID" json:"productunitid"`
 	Quantity      int       `json:"quantity"`
 	UnitPrice     float64   `json:"unitprice"`
-	CreatedAt     uuid.Time `json:"createdat"`
-	UpdateAt      uuid.Time `json:"updateat"`
+	CreatedAt     time.Time `json:"createdat"`
+	UpdateAt      time.Time `json:"updateat"`
 }
 
 func (OrderItem) TableName() string {
@@ -152,10 +154,11 @@ type Shipment struct {
 	ShipmentID     string    `gorm:"type:uuid;primaryKey" json:"shipmentid"`
 	ShipmentNumber string    `json:"shipmentnumber"`
 	FromBranchID   string    `gorm:"type:uuid;foreignKey:BrancheID" json:"frombranchid"`
-	ShipmentDate   uuid.Time `json:"shipmentdate"`
+	ToBranchID     string    `gorm:"type:uuid;foreignKey:BrancheID" json:"tobranchid"`
+	ShipmentDate   time.Time `json:"shipmentdate"`
 	Status         string    `json:"status"`
-	CreatedAt      uuid.Time `json:"createdat"`
-	UpdateAt       uuid.Time `json:"updateat"`
+	CreatedAt      time.Time `json:"createdat"`
+	UpdateAt       time.Time `json:"updateat"`
 }
 
 func (Shipment) TableName() string {
@@ -172,8 +175,8 @@ type ShipmentItem struct {
 	ShipmentID     string    `gorm:"type:uuid;foreignKey:ShipmentID" json:"shipmentid"`
 	ProductUnitID  string    `gorm:"type:uuid;foreignKey:ProductUnitID" json:"productunitid"`
 	Quantity       int       `json:"quantity"`
-	CreatedAt      uuid.Time `json:"createdat"`
-	UpdateAt       uuid.Time `json:"updateat"`
+	CreatedAt      time.Time `json:"createdat"`
+	UpdateAt       time.Time `json:"updateat"`
 }
 
 func (ShipmentItem) TableName() string {

@@ -3,6 +3,8 @@ package Func
 import (
 	"Api/Models"
 
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
@@ -21,6 +23,7 @@ func AddProduct(db *gorm.DB, c *fiber.Ctx) error {
 	product := Models.Product{
 		ProductName: req.ProductName,
 		Description: req.Description,
+		CreatedAt:   time.Now(),
 	}
 	if err := db.Create(&product).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product: " + err.Error()})
@@ -39,7 +42,7 @@ func LookProduct(db *gorm.DB, c *fiber.Ctx) error {
 func FindProduct(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var product Models.Product
-	if err := db.Where("id = ?", id).First(&product).Error; err != nil {
+	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 	return c.JSON(fiber.Map{"This": "Product", "Data": product})
@@ -48,7 +51,7 @@ func FindProduct(db *gorm.DB, c *fiber.Ctx) error {
 func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var product Models.Product
-	if err := db.Where("id = ?", id).First(&product).Error; err != nil {
+	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 	if err := db.Delete(&product).Error; err != nil {
@@ -70,7 +73,7 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	var product Models.Product
-	if err := db.Where("id = ?", id).First(&product).Error; err != nil {
+	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 
@@ -90,13 +93,13 @@ func ProductRouter(app fiber.Router, db *gorm.DB) {
 	app.Get("/Product", func(c *fiber.Ctx) error {
 		return LookProduct(db, c)
 	})
-	app.Get("/Product", func(c *fiber.Ctx) error {
+	app.Get("/Product/:id", func(c *fiber.Ctx) error {
 		return FindProduct(db, c)
 	})
-	app.Delete("/Product", func(c *fiber.Ctx) error {
+	app.Delete("/Product/:id", func(c *fiber.Ctx) error {
 		return DeleteProduct(db, c)
 	})
-	app.Put("/Product", func(c *fiber.Ctx) error {
+	app.Put("/Product/:id", func(c *fiber.Ctx) error {
 		return UpdateProduct(db, c)
 	})
 }
