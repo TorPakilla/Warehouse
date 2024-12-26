@@ -63,6 +63,7 @@ func main() {
 
 	Func.EmloyeesRoutes(app, db)
 	Func.BranchesRoutes(app, db)
+	Func.ProductRouter(app, db)
 
 	log.Fatal(app.Listen(":5050"))
 }
