@@ -8,7 +8,6 @@ import (
 
 	"Api/Authentication"
 	"Api/Func"
-	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
@@ -75,16 +74,16 @@ func main() {
 	// 	&Models.ShipmentItem{},
 	// )
 
-	db.AutoMigrate(&Models.Employees{},
-		&Models.Branches{},
-		&Models.Product{},
-		&Models.ProductUnit{},
-		&Models.Inventory{},
-		&Models.Supplier{},
-		&Models.Order{},
-		&Models.OrderItem{},
-		&Models.Shipment{},
-		&Models.ShipmentItem{})
+	// db.AutoMigrate(&Models.Employees{},
+	// 	&Models.Branches{},
+	// 	&Models.Product{},
+	// 	&Models.ProductUnit{},
+	// 	&Models.Inventory{},
+	// 	&Models.Supplier{},
+	// 	&Models.Order{},
+	// 	&Models.OrderItem{},
+	// 	&Models.Shipment{},
+	// 	&Models.ShipmentItem{})
 
 	app := fiber.New()
 

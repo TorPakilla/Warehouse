@@ -3,6 +3,7 @@ package Func
 import (
 	"Api/Models"
 	"crypto/rand"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -98,6 +99,17 @@ func DeleteOrder(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"Deleted": "Succeed"})
 }
 
+func fetchConversionRate(productUnitID string, db *gorm.DB) (int, error) {
+	var productUnit Models.ProductUnit
+	if err := db.Where("product_unit_id = ?", productUnitID).First(&productUnit).Error; err != nil {
+		return 0, err
+	}
+	if productUnit.ConversRate == nil {
+		return 0, fmt.Errorf("ไม่มีค่าการแปลงสำหรับ Product Unit ID %s", productUnitID)
+	}
+	return *productUnit.ConversRate, nil
+}
+
 func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var order Models.Order
@@ -114,13 +126,13 @@ func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	CheckStatus := map[string]bool{
+	validStatuses := map[string]bool{
 		"Pending":  true,
 		"Approved": true,
 		"Rejected": true,
 	}
 
-	if !CheckStatus[req.Status] {
+	if !validStatuses[req.Status] {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid status. Allowed statuses: Pending, Approved, Rejected"})
 	}
 
@@ -130,26 +142,32 @@ func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 		}
 	}
 
-	if err := db.Transaction(func(db *gorm.DB) error {
+	if err := db.Transaction(func(tx *gorm.DB) error {
 		if req.Status == "Approved" {
 			var orderItems []Models.OrderItem
-			if err := db.Where("order_id = ?", id).Find(&orderItems).Error; err != nil {
+			if err := tx.Where("order_id = ?", id).Find(&orderItems).Error; err != nil {
 				return err
 			}
 
 			for _, item := range orderItems {
-				if err := db.Model(&Models.Inventory{}).
+				conversRate, err := fetchConversionRate(item.ProductUnitID, tx)
+				if err != nil {
+					return fmt.Errorf("failed to fetch conversion rate for product unit ID %s: %w", item.ProductUnitID, err)
+				}
+
+				additionalValue := item.Quantity * conversRate
+				if err := tx.Model(&Models.Inventory{}).
 					Where("product_unit_id = ?", item.ProductUnitID).
-					UpdateColumn("quantity", gorm.Expr("quantity + ?", item.Quantity)).Error; err != nil {
-					return err
+					UpdateColumn("quantity", gorm.Expr("quantity + ?", additionalValue)).Error; err != nil {
+					return fmt.Errorf("failed to update inventory for product unit ID %s: %w", item.ProductUnitID, err)
 				}
 			}
 		}
 
 		order.UpdateAt = time.Now()
 		order.Status = req.Status
-		if err := db.Save(&order).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order item: " + err.Error()})
+		if err := tx.Save(&order).Error; err != nil {
+			return fmt.Errorf("failed to save order: %w", err)
 		}
 
 		return nil
@@ -157,7 +175,9 @@ func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order: " + err.Error()})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Order updated successfully"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Order updated successfully",
+	})
 }
 
 func OrderRoutes(app *fiber.App, db *gorm.DB) {
