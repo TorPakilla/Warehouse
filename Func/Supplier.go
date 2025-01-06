@@ -90,18 +90,38 @@ func DeleteSupplier(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func SupplierRoutes(app *fiber.App, db *gorm.DB) {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" {
+			return c.Next()
+		}
+
+		if role != "Stock" && role != "Accountant" && role != "Audit" {
+			if c.Method() != "GET" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
 	app.Get("/Supplier", func(c *fiber.Ctx) error {
 		return LookSuppliers(db, c)
 	})
+
 	app.Get("/Supplier/:id", func(c *fiber.Ctx) error {
 		return FindSupplier(db, c)
 	})
+
 	app.Post("/Supplier", func(c *fiber.Ctx) error {
 		return AddSupplier(db, c)
 	})
+
 	app.Put("/Supplier/:id", func(c *fiber.Ctx) error {
 		return UpdateSupplier(db, c)
 	})
+
 	app.Delete("/Supplier/:id", func(c *fiber.Ctx) error {
 		return DeleteSupplier(db, c)
 	})

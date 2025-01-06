@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  postgres:
+  postgres_WarehouseDB:
     image: postgres:latest
     container_name: WarehouseDB
     environment:
@@ -9,22 +7,37 @@ services:
       POSTGRES_USER: Admin
       POSTGRES_PASSWORD: 1234
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_warehouse_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     restart: unless-stopped
 
+  postgres_PosDB:
+    image: postgres:latest
+    container_name: PosDB
+    environment:
+      POSTGRES_DB: PosDB
+      POSTGRES_USER: Admin
+      POSTGRES_PASSWORD: 1234
+    volumes:
+      - postgres_pos_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: WarehouseAdmin
+    container_name: PGAdmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_PASSWORD: 1234
     ports:
       - "5050:80"
     depends_on:
-      - postgres
+      - postgres_WarehouseDB
+      - postgres_PosDB
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres_warehouse_data:
+  postgres_pos_data:

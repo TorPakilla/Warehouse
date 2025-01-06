@@ -89,18 +89,46 @@ func UpdateShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func ShipmentItemRoutes(app *fiber.App, db *gorm.DB) {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" && role != "Stock" {
+			return c.Next()
+		}
+
+		if role != "Account" {
+			if c.Method() != "GET" && c.Method() != "UPDATE" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+
+		if role != "Audit" {
+			if c.Method() != "GET" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
 	app.Get("/ShipmentItems", func(c *fiber.Ctx) error {
 		return LookShipmentItems(db, c)
 	})
+
 	app.Get("/ShipmentItems/:id", func(c *fiber.Ctx) error {
 		return FindShipmentItem(db, c)
 	})
+
 	app.Post("/ShipmentItems", func(c *fiber.Ctx) error {
 		return AddShipmentItem(db, c)
 	})
+
 	app.Put("/ShipmentItems/:id", func(c *fiber.Ctx) error {
 		return UpdateShipmentItem(db, c)
 	})
+
 	app.Delete("/ShipmentItems/:id", func(c *fiber.Ctx) error {
 		return DeleteShipmentItem(db, c)
 	})

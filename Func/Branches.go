@@ -90,6 +90,22 @@ func UpdateBranches(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func BranchesRoutes(app *fiber.App, db *gorm.DB) {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" {
+			return c.Next()
+		}
+
+		if role != "Stock" && role != "Account" && role != "Audit" {
+			if c.Method() != "GET" && c.Method() != "UPDATE" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
 	app.Post("/Branches", func(c *fiber.Ctx) error {
 		return AddBranches(db, c)
 	})

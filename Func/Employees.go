@@ -1,9 +1,11 @@
 package Func
 
 import (
+	"Api/Authentication"
 	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -22,10 +24,16 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	}
+
 	CheckRoles := map[string]bool{
 		"Admin":   true,
 		"User":    true,
 		"Manager": true,
+		"God":     true,
 	}
 
 	if !CheckRoles[req.Role] {
@@ -34,7 +42,7 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 
 	user := Models.Employees{
 		Username:  req.Username,
-		Password:  req.Password,
+		Password:  string(hashedPassword),
 		Role:      req.Role,
 		Name:      req.Name,
 		BrancheID: req.BrancheID,
@@ -97,13 +105,23 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	CheckRoles := map[string]bool{
-		"Admin":   true,
-		"User":    true,
+		"Stock":   true,
+		"Account": true,
 		"Manager": true,
+		"Audit":   true,
+		"God":     true,
 	}
 
 	if !CheckRoles[req.Role] {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed "})
+	}
+
+	if req.Password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+		}
+		req.Password = string(hashedPassword)
 	}
 
 	user.Username = req.Username
@@ -120,19 +138,39 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func EmployeesRoutes(app *fiber.App, db *gorm.DB) {
-	app.Get("/Employees", func(c *fiber.Ctx) error {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" {
+			return c.Next()
+		}
+
+		if role != "Stock" && role != "Account" && role != "Audit" {
+			if c.Method() != "GET" && c.Method() != "UPDATE" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
+	app.Get("/Employees", Authentication.AuthMiddleware, func(c *fiber.Ctx) error {
 		return LookEmployees(db, c)
 	})
-	app.Get("/Employees/:id", func(c *fiber.Ctx) error {
+
+	app.Get("/Employees/:id", Authentication.AuthMiddleware, func(c *fiber.Ctx) error {
 		return FindEmployees(db, c)
 	})
-	app.Post("/Employees", func(c *fiber.Ctx) error {
+
+	app.Post("/Employees", Authentication.AuthMiddleware, func(c *fiber.Ctx) error {
 		return AddEmployees(db, c)
 	})
-	app.Put("/Employees/:id", func(c *fiber.Ctx) error {
+
+	app.Put("/Employees/:id", Authentication.AuthMiddleware, func(c *fiber.Ctx) error {
 		return UpdateEmployees(db, c)
 	})
-	app.Delete("/Employees/:id", func(c *fiber.Ctx) error {
+
+	app.Delete("/Employees/:id", Authentication.AuthMiddleware, func(c *fiber.Ctx) error {
 		return DeleteEmployees(db, c)
 	})
 }

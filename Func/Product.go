@@ -87,18 +87,37 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func ProductRouter(app fiber.Router, db *gorm.DB) {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" && role != "Stock" {
+			return c.Next()
+		}
+
+		if role != "Account" && role != "Audit" {
+			if c.Method() != "GET" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
 	app.Post("/Product", func(c *fiber.Ctx) error {
 		return AddProduct(db, c)
 	})
+
 	app.Get("/Product", func(c *fiber.Ctx) error {
 		return LookProduct(db, c)
 	})
+
 	app.Get("/Product/:id", func(c *fiber.Ctx) error {
 		return FindProduct(db, c)
 	})
+
 	app.Delete("/Product/:id", func(c *fiber.Ctx) error {
 		return DeleteProduct(db, c)
 	})
+
 	app.Put("/Product/:id", func(c *fiber.Ctx) error {
 		return UpdateProduct(db, c)
 	})

@@ -30,6 +30,11 @@ func AddOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 	if err := db.Create(&orderItem).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order item: " + err.Error()})
 	}
+
+	if err := UpdateTotalAmount(db, req.OrderID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update total amount: " + err.Error()})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New Order Item": orderItem})
 }
 
@@ -93,18 +98,39 @@ func UpdateOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func OrderItemRoutes(app *fiber.App, db *gorm.DB) {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" && role != "Stock" {
+			return c.Next()
+		}
+
+		if role != "Account" && role != "Audit" {
+			if c.Method() != "GET" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
 	app.Get("/OrderItems", func(c *fiber.Ctx) error {
 		return LookOrderItems(db, c)
 	})
+
 	app.Get("/OrderItems/:id", func(c *fiber.Ctx) error {
 		return FindOrderItem(db, c)
 	})
+
 	app.Post("/OrderItems", func(c *fiber.Ctx) error {
 		return AddOrderItem(db, c)
 	})
+
 	app.Put("/OrderItems/:id", func(c *fiber.Ctx) error {
 		return UpdateOrderItem(db, c)
 	})
+
 	app.Delete("/OrderItems/:id", func(c *fiber.Ctx) error {
 		return DeleteOrderItem(db, c)
 	})

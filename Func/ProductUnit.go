@@ -108,7 +108,6 @@ func UpdateProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 	CheckType := map[string]bool{
 		"Pallet": true,
 		"Box":    true,
-		"Pieces": true,
 	}
 
 	if !CheckType[req.Type] {
@@ -117,10 +116,10 @@ func UpdateProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 
 	var ConverRate *int
 	if req.Type == "Pallet" {
-		Rate := 30
+		Rate := 12
 		ConverRate = &Rate
 	} else if req.Type == "Box" {
-		Rate := 12
+		Rate := 30
 		ConverRate = &Rate
 	} else {
 		ConverRate = nil
@@ -138,16 +137,32 @@ func UpdateProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func ProductUnitRouter(app *fiber.App, db *gorm.DB) {
+	app.Use(func(c *fiber.Ctx) error {
+		role := c.Locals("role")
+		if role != "God" && role != "Manager" && role != "Stock" {
+			return c.Next()
+		}
+
+		if role != "Account" && role != "Audit" {
+			if c.Method() != "GET" {
+				return c.Next()
+			} else {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
 	app.Post("/ProductUnit", func(c *fiber.Ctx) error {
 		return AddProductUnit(db, c)
 	})
 
 	app.Get("/ProductUnit/:id", func(c *fiber.Ctx) error {
-		return LookProductUnit(db, c)
+		return FindProductUnit(db, c)
 	})
 
 	app.Get("/ProductUnit", func(c *fiber.Ctx) error {
-		return FindProductUnit(db, c)
+		return LookProductUnit(db, c)
 	})
 
 	app.Delete("/ProductUnit/:id", func(c *fiber.Ctx) error {

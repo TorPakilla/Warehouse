@@ -28,11 +28,11 @@ func (s *Employees) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 type Branches struct {
-	BrancheID string      `gorm:"type:uuid;primaryKey" json:"brancheid"`
-	BName     string      `json:"bname"`
-	Location  string      `json:"location"`
-	CreatedAt time.Time   `json:"createdat"`
-	Employees []Employees `gorm:"foreignKey:BrancheID" json:"employees"`
+	BrancheID string    `gorm:"type:uuid;primaryKey" json:"brancheid"`
+	BName     string    `json:"bname"`
+	Location  string    `json:"location"`
+	CreatedAt time.Time `json:"createdat"`
+	Employees string    `gorm:"foreignKey:BrancheID" json:"employees"`
 }
 
 func (Branches) TableName() string {
@@ -48,6 +48,7 @@ type Product struct {
 	ProductID   string    `gorm:"type:uuid;primaryKey" json:"productid"`
 	ProductName string    `json:"productname"`
 	Description string    `json:"description"`
+	Image       []byte    `json:"image"`
 	CreatedAt   time.Time `json:"createdat"`
 }
 
