@@ -19,6 +19,23 @@ func AddSupplier(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"name":        true,
+		"pricepallet": true,
+		"productid":   true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	supplier := Models.Supplier{
 		Name:        req.Name,
 		PricePallet: req.PricePallet,
@@ -60,6 +77,23 @@ func UpdateSupplier(db *gorm.DB, c *fiber.Ctx) error {
 		Name        string  `json:"name"`
 		PricePallet float64 `json:"pricepallet"`
 		ProductID   string  `gorm:"foreignKey:ProductID" json:"productid"`
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"name":        true,
+		"pricepallet": true,
+		"productid":   true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
 	}
 
 	var req SupplierRequest

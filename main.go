@@ -86,13 +86,18 @@ func main() {
 	// 	&Models.ShipmentItem{})
 
 	app := fiber.New()
-
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("db", db)
 		return c.Next()
 	})
 
+	// app.Post("/create-user", func(c *fiber.Ctx) error {
+	// 	return Func.CreateUser(db, c)
+	// })
+
 	app.Post("/login", Authentication.Login)
+
+	app.Use("/protected", Protected)
 
 	Func.EmployeesRoutes(app, db)
 	Func.BranchesRoutes(app, db)

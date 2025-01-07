@@ -20,6 +20,22 @@ func AddProduct(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"productname": true,
+		"description": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	product := Models.Product{
 		ProductName: req.ProductName,
 		Description: req.Description,
@@ -70,6 +86,22 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 	var req ProductRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"productname": true,
+		"description": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
 	}
 
 	var product Models.Product

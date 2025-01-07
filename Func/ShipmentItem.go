@@ -19,6 +19,23 @@ func AddShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"shipmentid":    true,
+		"productunitid": true,
+		"quantity":      true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	shipmentItem := Models.ShipmentItem{
 		ShipmentID:    req.ShipmentID,
 		ProductUnitID: req.ProductUnitID,
@@ -71,6 +88,23 @@ func UpdateShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 		ShipmentID    string `json:"shipmentid"`
 		ProductUnitID string `json:"productunitid"`
 		Quantity      int    `json:"quantity"`
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"shipmentid":    true,
+		"productunitid": true,
+		"quantity":      true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
 	}
 
 	var req ShipmentItemRequest
