@@ -25,6 +25,7 @@ func AddProduct(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product name and type are required"})
 	}
 
+<<<<<<< HEAD
 	// Handle file upload
 	file, err := c.FormFile("image")
 	var fileBytes []byte
@@ -43,6 +44,24 @@ func AddProduct(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	// สร้าง Product
+=======
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"productname": true,
+		"description": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
+>>>>>>> 39138bef4b899c73de376803bfd1d39ef50151a1
 	product := Models.Product{
 		ProductName: productName,
 		Description: description,
@@ -107,6 +126,30 @@ func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
 
 func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
+<<<<<<< HEAD
+=======
+	var req ProductRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"productname": true,
+		"description": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
+>>>>>>> 39138bef4b899c73de376803bfd1d39ef50151a1
 	var product Models.Product
 	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})

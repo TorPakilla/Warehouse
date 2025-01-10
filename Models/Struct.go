@@ -32,7 +32,6 @@ type Branches struct {
 	BName     string    `json:"bname"`
 	Location  string    `json:"location"`
 	CreatedAt time.Time `json:"createdat"`
-	Employees string    `gorm:"foreignKey:BrancheID" json:"employees"`
 }
 
 func (Branches) TableName() string {

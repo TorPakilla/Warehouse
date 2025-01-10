@@ -21,7 +21,7 @@ func (Inventory) TableName() string {
 	return "Inventory"
 }
 
-func AddShipment(db *gorm.DB, c *fiber.Ctx) error {
+func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	type ShipmentRequest struct {
 		Status       string `json:"status"`
 		FromBranchID string `json:"frombranchid"`
@@ -33,6 +33,23 @@ func AddShipment(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"status":       true,
+		"frombranchid": true,
+		"tobranchid":   true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	req.Status = "Pending"
 
 	CheckStatus := map[string]bool{
@@ -41,6 +58,11 @@ func AddShipment(db *gorm.DB, c *fiber.Ctx) error {
 
 	if !CheckStatus[req.Status] {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed "})
+	}
+
+	var inventory Inventory
+	if err := posDB.Where("branch_id = ?", req.ToBranchID).First(&inventory).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ToBranchID not found in POS inventory"})
 	}
 
 	shipment := Models.Shipment{
@@ -93,9 +115,30 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Shipment not found"})
 	}
 
+	if shipment.Status != "Pending" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only shipments with Pending status can be updated"})
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"status":       true,
+		"frombranchid": true,
+		"tobranchid":   true,
+		"inventory_id": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	type ShipmentRequest struct {
 		Status      string `json:"status"`
-		ProductID   string `json:"product_id"`
 		InventoryID string `json:"inventory_id"`
 	}
 
@@ -114,9 +157,19 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid status. Allowed: Pending, Approved, Rejected"})
 	}
 
-	if shipment.Status == "Approved" || shipment.Status == "Rejected" {
-		if req.Status == "Pending" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot revert status to Pending"})
+	if req.Status == "Approved" {
+		var inventoryItem Inventory
+		if err := posDB.Where("inventory_id = ?", req.InventoryID).First(&inventoryItem).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Inventory item not found"})
+		}
+
+		targetBranchID, err := uuid.Parse(shipment.ToBranchID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid ToBranchID format"})
+		}
+
+		if inventoryItem.BranchID != targetBranchID {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Inventory does not belong to the target branch"})
 		}
 	}
 
@@ -142,6 +195,7 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 				}
 
 				posItem.Quantity += item.Quantity
+				posItem.UpdatedAt = time.Now()
 				inventoryPosList = append(inventoryPosList, posItem)
 			}
 
@@ -149,6 +203,12 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 				if err := posDB.Model(&Inventory{}).
 					Where("inventory_id = ?", item.InventoryID).
 					UpdateColumn("quantity", item.Quantity).Error; err != nil {
+					return err
+				}
+
+				if err := posDB.Model(&Inventory{}).
+					Where("inventory_id = ?", item.InventoryID).
+					UpdateColumn("updated_at", item.UpdatedAt).Error; err != nil {
 					return err
 				}
 			}
@@ -202,7 +262,7 @@ func ShipmentRoutes(app *fiber.App, db *gorm.DB, posDB *gorm.DB) {
 	})
 
 	app.Post("/Shipments", func(c *fiber.Ctx) error {
-		return AddShipment(db, c)
+		return AddShipment(db, posDB, c)
 	})
 
 	app.Put("/Shipments/:id", func(c *fiber.Ctx) error {

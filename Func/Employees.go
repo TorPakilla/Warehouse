@@ -9,6 +9,55 @@ import (
 	"gorm.io/gorm"
 )
 
+func CreateUser(db *gorm.DB, c *fiber.Ctx) error {
+	// กำหนดค่าข้อมูลเริ่มต้น
+	req := struct {
+		Username  string  `json:"username"`
+		Password  string  `json:"password"`
+		Role      string  `json:"role"`
+		Name      string  `json:"name"`
+		BrancheID string  `json:"brancheid"`
+		Salary    float64 `json:"salary"`
+	}{
+		Username:  "God",
+		Password:  "1234",
+		Role:      "God",
+		Name:      "AmGod",
+		BrancheID: "61b8b86f-e00b-40d6-bb49-8c342f80757a",
+		Salary:    50000,
+	}
+
+	// ตรวจสอบว่า BrancheID มีอยู่ในฐานข้อมูลหรือไม่
+	var branch Models.Branches
+	if err := db.Where("branche_id = ?", req.BrancheID).First(&branch).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BrancheID not found"})
+	}
+
+	// แฮชรหัสผ่านก่อนบันทึก
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	}
+
+	// สร้างผู้ใช้ใหม่
+	user := Models.Employees{
+		Username:  req.Username,
+		Password:  string(hashedPassword),
+		Role:      req.Role,
+		Name:      req.Name,
+		BrancheID: req.BrancheID,
+		Salary:    req.Salary,
+	}
+
+	// บันทึกข้อมูลลงในฐานข้อมูล
+	if err := db.Create(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user: " + err.Error()})
+	}
+
+	// ส่งข้อมูลผู้ใช้ที่สร้างสำเร็จ
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "User created successfully", "user": user})
+}
+
 func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	type UserRequest struct {
 		Username  string  `json:"username"`
@@ -24,20 +73,29 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	if req.Username == "" || req.Password == "" || req.Role == "" || req.Name == "" || req.BrancheID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All fields are required"})
 	}
 
-	CheckRoles := map[string]bool{
+	var branch Models.Branches
+	if err := db.Where("branche_id = ?", req.BrancheID).First(&branch).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BrancheID not found"})
+	}
+
+	validRoles := map[string]bool{
 		"Admin":   true,
 		"User":    true,
 		"Manager": true,
 		"God":     true,
 	}
 
-	if !CheckRoles[req.Role] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed "})
+	if !validRoles[req.Role] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed roles are Admin, User, Manager, God."})
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
 
 	user := Models.Employees{
@@ -48,10 +106,12 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		BrancheID: req.BrancheID,
 		Salary:    req.Salary,
 	}
+
 	if err := db.Create(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user: " + err.Error()})
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New": user})
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"new_user": user})
 }
 
 func LookEmployees(db *gorm.DB, c *fiber.Ctx) error {
@@ -86,6 +146,8 @@ func DeleteEmployees(db *gorm.DB, c *fiber.Ctx) error {
 func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var user Models.Employees
+
+	// ตรวจสอบว่าผู้ใช้มีอยู่หรือไม่
 	if err := db.Where("employees_id = ?", id).First(&user).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
@@ -100,11 +162,13 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	var req UserRequest
+	// แปลง JSON เป็น struct
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	CheckRoles := map[string]bool{
+	// ตรวจสอบ role ที่อนุญาต
+	validRoles := map[string]bool{
 		"Stock":   true,
 		"Account": true,
 		"Manager": true,
@@ -112,10 +176,19 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		"God":     true,
 	}
 
-	if !CheckRoles[req.Role] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed "})
+	if req.Role != "" && !validRoles[req.Role] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed roles are Stock, Account, Manager, Audit, God."})
 	}
 
+	// ตรวจสอบว่า BrancheID มีอยู่ในฐานข้อมูลหรือไม่ (ถ้ามีการส่งมา)
+	if req.BrancheID != "" {
+		var branch Models.Branches
+		if err := db.Where("branche_id = ?", req.BrancheID).First(&branch).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BrancheID not found"})
+		}
+	}
+
+	// แฮชรหัสผ่านหากมีการอัปเดต
 	if req.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -124,17 +197,32 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		req.Password = string(hashedPassword)
 	}
 
-	user.Username = req.Username
-	user.Password = req.Password
-	user.Role = req.Role
-	user.Name = req.Name
-	user.BrancheID = req.BrancheID
-	user.Salary = req.Salary
+	// อัปเดตฟิลด์ที่ได้รับ
+	if req.Username != "" {
+		user.Username = req.Username
+	}
+	if req.Password != "" {
+		user.Password = req.Password
+	}
+	if req.Role != "" {
+		user.Role = req.Role
+	}
+	if req.Name != "" {
+		user.Name = req.Name
+	}
+	if req.BrancheID != "" {
+		user.BrancheID = req.BrancheID
+	}
+	if req.Salary != 0 {
+		user.Salary = req.Salary
+	}
 
+	// บันทึกข้อมูล
 	if err := db.Save(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user: " + err.Error()})
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"Updated": "Succeed"})
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Update Succeed", "user": user})
 }
 
 func EmployeesRoutes(app *fiber.App, db *gorm.DB) {

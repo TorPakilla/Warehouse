@@ -28,6 +28,23 @@ func AddOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"supplierid": true,
+		"employeeid": true,
+		"status":     true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	req.Status = "Pending"
 
 	CheckStatus := map[string]bool{
@@ -117,13 +134,33 @@ func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	type OrderRequest struct {
+	if order.Status != "Pending" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only orders with Pending status can be updated"})
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"supplierid": true,
+		"employeeid": true,
+		"status":     true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
+	var req struct {
 		Status string `json:"status"`
 	}
 
-	var req OrderRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	if status, ok := body["status"].(string); ok && status != "" {
+		req.Status = status
 	}
 
 	validStatuses := map[string]bool{
@@ -132,47 +169,41 @@ func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 		"Rejected": true,
 	}
 
-	if !validStatuses[req.Status] {
+	if req.Status != "" && !validStatuses[req.Status] {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid status. Allowed statuses: Pending, Approved, Rejected"})
 	}
 
-	if order.Status == "Approved" || order.Status == "Rejected" {
-		if req.Status == "Pending" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot revert status to Pending"})
-		}
-	}
-
-	if err := db.Transaction(func(tx *gorm.DB) error {
-		if req.Status == "Approved" {
+	if req.Status == "Approved" {
+		if err := db.Transaction(func(tx *gorm.DB) error {
 			var orderItems []Models.OrderItem
 			if err := tx.Where("order_id = ?", id).Find(&orderItems).Error; err != nil {
-				return err
+				return fmt.Errorf("failed to fetch order items: %w", err)
 			}
 
 			for _, item := range orderItems {
-				conversRate, err := fetchConversionRate(item.ProductUnitID, tx)
+				conversionRate, err := fetchConversionRate(item.ProductUnitID, tx)
 				if err != nil {
 					return fmt.Errorf("failed to fetch conversion rate for product unit ID %s: %w", item.ProductUnitID, err)
 				}
 
-				additionalValue := item.Quantity * conversRate
+				additionalValue := item.Quantity * conversionRate
 				if err := tx.Model(&Models.Inventory{}).
 					Where("product_unit_id = ?", item.ProductUnitID).
 					UpdateColumn("quantity", gorm.Expr("quantity + ?", additionalValue)).Error; err != nil {
 					return fmt.Errorf("failed to update inventory for product unit ID %s: %w", item.ProductUnitID, err)
 				}
 			}
-		}
 
-		order.UpdateAt = time.Now()
-		order.Status = req.Status
-		if err := tx.Save(&order).Error; err != nil {
-			return fmt.Errorf("failed to save order: %w", err)
-		}
+			order.Status = req.Status
+			order.UpdateAt = time.Now()
+			if err := tx.Save(&order).Error; err != nil {
+				return fmt.Errorf("failed to update order status: %w", err)
+			}
 
-		return nil
-	}); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order: " + err.Error()})
+			return nil
+		}); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order: " + err.Error()})
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{

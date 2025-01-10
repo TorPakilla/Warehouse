@@ -18,6 +18,22 @@ func AddProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"message": "Bad Request"})
 	}
 
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"type":      true,
+		"productid": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
+	}
+
 	CheckType := map[string]bool{
 		"Pallet": true,
 		"Box":    true,
@@ -103,6 +119,22 @@ func UpdateProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 	var req ProductUnit
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format"})
+	}
+
+	body := make(map[string]interface{})
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	}
+
+	allowedFields := map[string]bool{
+		"type":      true,
+		"productid": true,
+	}
+
+	for key := range body {
+		if !allowedFields[key] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+		}
 	}
 
 	CheckType := map[string]bool{
