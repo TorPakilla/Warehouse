@@ -10,6 +10,7 @@ import (
 	"Api/Func"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -86,6 +87,11 @@ func main() {
 	// 	&Models.ShipmentItem{})
 
 	app := fiber.New()
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost:3000", // หรือใช้ "*" หากต้องการอนุญาตทุก origin
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+	}))
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("db", db)

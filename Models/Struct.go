@@ -48,7 +48,7 @@ type Product struct {
 	ProductID   string    `gorm:"type:uuid;primaryKey" json:"productid"`
 	ProductName string    `json:"productname"`
 	Description string    `json:"description"`
-	Image       []byte    `json:"image"`
+	Image       []byte    `json:"image"` // Field สำหรับจัดเก็บไฟล์ภาพ
 	CreatedAt   time.Time `json:"createdat"`
 }
 
