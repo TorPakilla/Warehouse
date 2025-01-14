@@ -2,55 +2,10 @@ package Func
 
 import (
 	"Api/Models"
-	"math/big"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
-
-// func AddBranches(db *gorm.DB, c *fiber.Ctx) error {
-// 	type Branches struct {
-// 		BName    string `json:"bname" validate:"required"`
-// 		Location string `json:"location" validate:"required"`
-// 	}
-
-// 	var req Branches
-// 	if err := c.BodyParser(&req); err != nil {
-// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
-// 	}
-
-// 	if req.BName == "" || req.Location == "" {
-// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "BName and Location are required"})
-// 	}
-
-// 	body := make(map[string]interface{})
-// 	if err := c.BodyParser(&body); err != nil {
-// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
-// 	}
-
-// 	allowedFields := map[string]bool{
-// 		"bname":    true,
-// 		"location": true,
-// 	}
-
-// 	for key := range body {
-// 		if !allowedFields[key] {
-// 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
-// 		}
-// 	}
-
-// 	branche := Models.Branches{
-// 		BName:    req.BName,
-// 		Location: req.Location,
-// 	}
-
-// 	if err := db.Create(&branche).Error; err != nil {
-// 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create branche: " + err.Error()})
-// 	}
-
-// 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New": branche})
-// }
 
 func AddBranches(db *gorm.DB, c *fiber.Ctx) error {
 	type Branches struct {
@@ -88,24 +43,11 @@ func AddBranches(db *gorm.DB, c *fiber.Ctx) error {
 		Location: req.Location,
 	}
 
-	// สร้าง UUID ใหม่สำหรับ Branch
 	if err := db.Create(&branche).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create branche: " + err.Error()})
 	}
 
-	// แปลง UUID เป็นตัวเลขลำดับ
-	branchUUID, err := uuid.Parse(branche.BrancheID) // UUID เป็น string ที่เก็บในฐานข้อมูล
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to parse UUID: " + err.Error()})
-	}
-	numericUUID := new(big.Int)
-	numericUUID.SetBytes(branchUUID[:]) // แปลง UUID เป็นเลขแบบ big.Int
-
-	// ส่งผลลัพธ์ให้ผู้ใช้งานในรูปแบบที่แสดงเลขลำดับ
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"New":            branche,
-		"UUID_as_number": numericUUID.String(),
-	})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New": branche})
 }
 
 func LookBranches(db *gorm.DB, c *fiber.Ctx) error {

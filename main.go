@@ -10,6 +10,7 @@ import (
 	"Api/Func"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -91,6 +92,11 @@ func main() {
 		c.Locals("db", db)
 		return c.Next()
 	})
+	api := app.Group("/api")
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost:3000", // อนุญาต domain frontend
+		AllowMethods: "GET,POST,PUT,DELETE",
+	}))
 
 	// app.Post("/create-user", func(c *fiber.Ctx) error {
 	// 	return Func.CreateUser(db, c)

@@ -101,3 +101,23 @@ func isValidRole(role string) bool {
 	}
 	return false
 }
+
+func LoginHandler(c *fiber.Ctx) error {
+	// ดึงข้อมูล username/password จาก body
+	var loginRequest struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := c.BodyParser(&loginRequest); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON"})
+	}
+
+	// ตรวจสอบ username/password
+	if loginRequest.Username == "admin" && loginRequest.Password == "password" {
+		token := "mock-jwt-token" // สร้างหรือใช้ JWT จริง
+		return c.JSON(fiber.Map{"token": token})
+	}
+
+	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
+}

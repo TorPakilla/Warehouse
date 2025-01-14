@@ -9,55 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-func CreateUser(db *gorm.DB, c *fiber.Ctx) error {
-	// กำหนดค่าข้อมูลเริ่มต้น
-	req := struct {
-		Username  string  `json:"username"`
-		Password  string  `json:"password"`
-		Role      string  `json:"role"`
-		Name      string  `json:"name"`
-		BrancheID string  `json:"brancheid"`
-		Salary    float64 `json:"salary"`
-	}{
-		Username:  "God",
-		Password:  "1234",
-		Role:      "God",
-		Name:      "AmGod",
-		BrancheID: "61b8b86f-e00b-40d6-bb49-8c342f80757a",
-		Salary:    50000,
-	}
-
-	// ตรวจสอบว่า BrancheID มีอยู่ในฐานข้อมูลหรือไม่
-	var branch Models.Branches
-	if err := db.Where("branche_id = ?", req.BrancheID).First(&branch).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BrancheID not found"})
-	}
-
-	// แฮชรหัสผ่านก่อนบันทึก
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
-	}
-
-	// สร้างผู้ใช้ใหม่
-	user := Models.Employees{
-		Username:  req.Username,
-		Password:  string(hashedPassword),
-		Role:      req.Role,
-		Name:      req.Name,
-		BrancheID: req.BrancheID,
-		Salary:    req.Salary,
-	}
-
-	// บันทึกข้อมูลลงในฐานข้อมูล
-	if err := db.Create(&user).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user: " + err.Error()})
-	}
-
-	// ส่งข้อมูลผู้ใช้ที่สร้างสำเร็จ
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "User created successfully", "user": user})
-}
-
 func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	type UserRequest struct {
 		Username  string  `json:"username"`
@@ -83,9 +34,10 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	validRoles := map[string]bool{
-		"Admin":   true,
-		"User":    true,
+		"Stock":   true,
+		"Account": true,
 		"Manager": true,
+		"Audit":   true,
 		"God":     true,
 	}
 
