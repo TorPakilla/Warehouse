@@ -92,7 +92,6 @@ func main() {
 		c.Locals("db", db)
 		return c.Next()
 	})
-	api := app.Group("/api")
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "http://localhost:3000", // อนุญาต domain frontend
 		AllowMethods: "GET,POST,PUT,DELETE",
