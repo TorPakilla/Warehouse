@@ -74,11 +74,11 @@ func AddProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func LookProductUnit(db *gorm.DB, c *fiber.Ctx) error {
-	var productUnit []Models.ProductUnit
-	if err := db.Find(&productUnit).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"message": "Internal Server Error"})
+	var productUnits []Models.ProductUnit
+	if err := db.Find(&productUnits).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Internal Server Error"})
 	}
-	return c.JSON(fiber.Map{"Product Units": productUnit})
+	return c.JSON(fiber.Map{"Product Units": productUnits}) // ส่งข้อมูลใน key "Product Units"
 }
 
 func FindProductUnit(db *gorm.DB, c *fiber.Ctx) error {
@@ -185,23 +185,23 @@ func ProductUnitRouter(app *fiber.App, db *gorm.DB) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
 	})
 
-	app.Post("/ProductUnit", func(c *fiber.Ctx) error {
+	app.Post("/ProductUnits", func(c *fiber.Ctx) error { // เปลี่ยนเส้นทางให้ตรง
 		return AddProductUnit(db, c)
 	})
 
-	app.Get("/ProductUnit/:id", func(c *fiber.Ctx) error {
+	app.Get("/ProductUnits/:id", func(c *fiber.Ctx) error { // เปลี่ยนเส้นทางให้ตรง
 		return FindProductUnit(db, c)
 	})
 
-	app.Get("/ProductUnit", func(c *fiber.Ctx) error {
+	app.Get("/ProductUnits", func(c *fiber.Ctx) error { // เปลี่ยนเส้นทางให้ตรง
 		return LookProductUnit(db, c)
 	})
 
-	app.Delete("/ProductUnit/:id", func(c *fiber.Ctx) error {
+	app.Delete("/ProductUnits/:id", func(c *fiber.Ctx) error { // เปลี่ยนเส้นทางให้ตรง
 		return DeleteProductUnit(db, c)
 	})
 
-	app.Put("/ProductUnit/:id", func(c *fiber.Ctx) error {
+	app.Put("/ProductUnits/:id", func(c *fiber.Ctx) error { // เปลี่ยนเส้นทางให้ตรง
 		return UpdateProductUnit(db, c)
 	})
 }

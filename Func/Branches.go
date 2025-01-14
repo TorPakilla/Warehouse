@@ -50,12 +50,12 @@ func AddBranches(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New": branche})
 }
 
-func LookBranches(db *gorm.DB, c *fiber.Ctx) error {
+func LookBranch(db *gorm.DB, c *fiber.Ctx) error {
 	var branches []Models.Branches
 	if err := db.Find(&branches).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to find branches: " + err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Internal Server Error"})
 	}
-	return c.JSON(fiber.Map{"This": "Branches", "Data": branches})
+	return c.JSON(fiber.Map{"Branches": branches}) // ส่งข้อมูลใน key "Branches"
 }
 
 func FindBranches(db *gorm.DB, c *fiber.Ctx) error {
@@ -145,7 +145,7 @@ func BranchesRoutes(app *fiber.App, db *gorm.DB) {
 	})
 
 	app.Get("/Branches", func(c *fiber.Ctx) error {
-		return LookBranches(db, c)
+		return LookBranch(db, c)
 	})
 
 	app.Get("/Branches/:id", func(c *fiber.Ctx) error {

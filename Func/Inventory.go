@@ -9,10 +9,10 @@ import (
 
 func AddInventory(db *gorm.DB, c *fiber.Ctx) error {
 	type InventoryRequest struct {
-		ProductUnitID string  `json:"productunitid"`
-		BrancheID     string  `json:"brancheid"`
-		Quantity      int     `json:"quantity"`
-		Price         float64 `json:"price"`
+		ProductUnitID string  `json:"productunitid" validate:"required"`
+		BrancheID     string  `json:"brancheid" validate:"required"`
+		Quantity      int     `json:"quantity" validate:"required,min=1"`
+		Price         float64 `json:"price" validate:"required,min=0"`
 	}
 
 	var req InventoryRequest
@@ -85,12 +85,25 @@ func LookInventory(db *gorm.DB, c *fiber.Ctx) error {
 		BrancheID      string  `json:"brancheid"`
 		Quantity       int     `json:"quantity"`
 		Price          float64 `json:"price"`
+		Type           string  `json:"type"`
+		ConversRate    *int    `json:"conversrate"`
+		Box            int     `json:"box"`
 		TotalPrice     float64 `json:"totalprice"`
 		QuantityStatus string  `json:"quantitystatus"`
 	}
 
 	var result []InventoryBox
 	for _, inventory := range inventories {
+		var productUnit Models.ProductUnit
+		if err := db.Where("product_unit_id = ?", inventory.ProductUnitID).First(&productUnit).Error; err != nil {
+			continue
+		}
+
+		var box int
+		if productUnit.ConversRate != nil {
+			box = inventory.Quantity / *productUnit.ConversRate
+		}
+
 		totalPrice := float64(inventory.Quantity) * inventory.Price
 		quantityStatus := "Low"
 		if inventory.Quantity >= 1000 {
@@ -106,6 +119,9 @@ func LookInventory(db *gorm.DB, c *fiber.Ctx) error {
 			BrancheID:      inventory.BrancheID,
 			Quantity:       inventory.Quantity,
 			Price:          inventory.Price,
+			Type:           productUnit.Type,
+			ConversRate:    productUnit.ConversRate,
+			Box:            box,
 			TotalPrice:     totalPrice,
 			QuantityStatus: quantityStatus,
 		})
