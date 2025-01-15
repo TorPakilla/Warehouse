@@ -15,7 +15,7 @@ func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 		Description     string  `json:"description"`
 		Type            string  `json:"type"`
 		BrancheID       string  `json:"brancheid"`
-		InitialQuantity uint32  `json:"initialquantity"`
+		InitialQuantity int     `json:"initialquantity"`
 		Price           float64 `json:"price"`
 	}
 

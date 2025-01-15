@@ -106,7 +106,7 @@ func main() {
 	app.Use("/protected", Protected)
 
 	Func.EmployeesRoutes(app, db)
-	Func.BranchesRoutes(app, db)
+	Func.BranchesRoutes(app, db, posDB)
 	Func.ProductRouter(app, db)
 	Func.ProductUnitRouter(app, db)
 	Func.InventoryRoutes(app, db)

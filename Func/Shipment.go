@@ -21,62 +21,90 @@ func (Inventory) TableName() string {
 	return "Inventory"
 }
 
+// AddShipment handles the creation of a shipment and manages inventory movement
 func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	type ShipmentRequest struct {
-		Status       string `json:"status"`
-		FromBranchID string `json:"frombranchid"`
-		ToBranchID   string `json:"tobranchid"`
+		FromBranchID uuid.UUID             `json:"fromBranchId" validate:"required"`
+		ToBranchID   uuid.UUID             `json:"toBranchId" validate:"required"`
+		Status       string                `json:"status" validate:"required,oneof=Pending Approved Rejected"`
+		Items        []Models.ShipmentItem `json:"items" validate:"required,dive"`
 	}
 
 	var req ShipmentRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format", "details": err.Error()})
 	}
 
-	body := make(map[string]interface{})
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	if len(req.Items) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Shipment items are required"})
 	}
 
-	allowedFields := map[string]bool{
-		"status":       true,
-		"frombranchid": true,
-		"tobranchid":   true,
+	// Check if ToBranch exists in POS
+	var toBranch Inventory
+	if err := posDB.Where("branch_id = ?", req.ToBranchID).First(&toBranch).Error; err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ToBranch is not a valid POS branch"})
 	}
 
-	for key := range body {
-		if !allowedFields[key] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+	// Create Shipment
+	shipment := Models.Shipment{
+		ShipmentID:   uuid.New().String(),
+		FromBranchID: req.FromBranchID.String(), // แปลง UUID เป็น String
+		ToBranchID:   req.ToBranchID.String(),   // แปลง UUID เป็น String
+		Status:       req.Status,
+		ShipmentDate: time.Now(),
+	}
+
+	if err := db.Create(&shipment).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipment"})
+	}
+
+	for _, item := range req.Items {
+		// ตรวจสอบ Inventory ของ Warehouse
+		var warehouseInventory Inventory
+		if err := db.Where("inventory_id = ?", item.InventoryID).First(&warehouseInventory).Error; err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Inventory not found in Warehouse"})
+		}
+
+		if warehouseInventory.Quantity <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot add items with 0 quantity in inventory"})
+		}
+
+		if warehouseInventory.Quantity < item.Quantity {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not enough inventory in Warehouse"})
+		}
+
+		// ลดจำนวนสินค้าใน Warehouse
+		warehouseInventory.Quantity -= item.Quantity
+		if err := db.Save(&warehouseInventory).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update Warehouse inventory"})
+		}
+
+		// เพิ่มหรืออัปเดต Inventory ใน POS
+		var posInventory Inventory
+		err := posDB.Where("product_id = ? AND branch_id = ?", warehouseInventory.ProductID, req.ToBranchID).
+			First(&posInventory).Error
+		if err == gorm.ErrRecordNotFound {
+			posInventory = Inventory{
+				InventoryID: uuid.New(),
+				ProductID:   warehouseInventory.ProductID,
+				BranchID:    req.ToBranchID,
+				Quantity:    item.Quantity,
+				UpdatedAt:   time.Now(),
+			}
+			if err := posDB.Create(&posInventory).Error; err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create POS inventory"})
+			}
+		} else if err == nil {
+			posInventory.Quantity += item.Quantity
+			if err := posDB.Save(&posInventory).Error; err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update POS inventory"})
+			}
+		} else {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Database error: " + err.Error()})
 		}
 	}
 
-	req.Status = "Pending"
-
-	CheckStatus := map[string]bool{
-		"Pending": true,
-	}
-
-	if !CheckStatus[req.Status] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed "})
-	}
-
-	var inventory Inventory
-	if err := posDB.Where("branch_id = ?", req.ToBranchID).First(&inventory).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ToBranchID not found in POS inventory"})
-	}
-
-	shipment := Models.Shipment{
-		Status:       req.Status,
-		FromBranchID: req.FromBranchID,
-		ToBranchID:   req.ToBranchID,
-	}
-
-	shipment.ShipmentNumber = GenerateULID()
-
-	if err := db.Create(&shipment).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create shipment: " + err.Error()})
-	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New Shipment": shipment})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Shipment created successfully", "shipment": shipment})
 }
 
 func LookShipments(db *gorm.DB, c *fiber.Ctx) error {

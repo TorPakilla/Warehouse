@@ -123,7 +123,21 @@ func UpdateBranches(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Update Succeed"})
 }
 
-func BranchesRoutes(app *fiber.App, db *gorm.DB) {
+func GetPOSBranches(posDB *gorm.DB, c *fiber.Ctx) error {
+	var branches []Inventory
+	if err := posDB.Select("DISTINCT branch_id").Find(&branches).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch POS branches"})
+	}
+
+	var branchIDs []string
+	for _, branch := range branches {
+		branchIDs = append(branchIDs, branch.BranchID.String())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": branchIDs})
+}
+
+func BranchesRoutes(app *fiber.App, db *gorm.DB, posDB *gorm.DB) {
 	app.Use(func(c *fiber.Ctx) error {
 		role := c.Locals("role")
 		if role != "God" && role != "Manager" {
@@ -138,6 +152,10 @@ func BranchesRoutes(app *fiber.App, db *gorm.DB) {
 			}
 		}
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
+	app.Get("/POSBranches", func(c *fiber.Ctx) error {
+		return GetPOSBranches(posDB, c)
 	})
 
 	app.Post("/Branches", func(c *fiber.Ctx) error {

@@ -174,6 +174,7 @@ type ShipmentItem struct {
 	ShipmentListID string    `gorm:"type:uuid;primaryKey" json:"shipmentlistid"`
 	ShipmentID     string    `gorm:"type:uuid;foreignKey:ShipmentID" json:"shipmentid"`
 	ProductUnitID  string    `gorm:"type:uuid;foreignKey:ProductUnitID" json:"productunitid"`
+	InventoryID    string    `gorm:"type:uuid" json:"inventory_id"`
 	Quantity       int       `json:"quantity"`
 	CreatedAt      time.Time `json:"createdat"`
 	UpdateAt       time.Time `json:"updateat"`

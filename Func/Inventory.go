@@ -198,6 +198,39 @@ func DeleteInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Inventory deleted successfully"})
 }
 
+func GetInventoryByBranch(db *gorm.DB, c *fiber.Ctx) error {
+	branchID := c.Query("branchId")
+	if branchID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId query parameter is required"})
+	}
+
+	var inventories []Inventory
+	if err := db.Where("branch_id = ?", branchID).Find(&inventories).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch inventories", "details": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"inventories": inventories})
+}
+func GetWarehouseBranchesWithInventory(db *gorm.DB, c *fiber.Ctx) error {
+	var branches []struct {
+		BranchID   string `json:"branch_id"`
+		BranchName string `json:"branch_name"`
+	}
+
+	err := db.Raw(`
+        SELECT DISTINCT i.branche_id AS branch_id, b.b_name AS branch_name
+        FROM public."Inventory" i
+        JOIN public."Branches" b ON i.branche_id = b.branche_id
+        WHERE i.quantity > 0
+    `).Scan(&branches).Error
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch branches with inventory.", "details": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"branches": branches})
+}
+
 func InventoryRoutes(app *fiber.App, db *gorm.DB) {
 	app.Use(func(c *fiber.Ctx) error {
 		role := c.Locals("role")
@@ -213,6 +246,13 @@ func InventoryRoutes(app *fiber.App, db *gorm.DB) {
 			}
 		}
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
+	})
+
+	app.Get("/WarehouseBranchesWithInventory", func(c *fiber.Ctx) error {
+		return GetWarehouseBranchesWithInventory(db, c)
+	})
+	app.Get("/InventoriesByBranch", func(c *fiber.Ctx) error {
+		return GetInventoryByBranch(db, c)
 	})
 
 	app.Get("/Inventory", func(c *fiber.Ctx) error {
