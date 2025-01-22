@@ -8,6 +8,7 @@ import (
 
 	"Api/Authentication"
 	"Api/Func"
+	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -62,29 +63,36 @@ func main() {
 	}
 	fmt.Println("Connected to POS database!")
 
-	// db.Migrator().DropTable(
-	// 	&Models.Employees{},
-	// 	&Models.Branches{},
-	// 	&Models.Product{},
-	// 	&Models.ProductUnit{},
-	// 	&Models.Inventory{},
-	// 	&Models.Supplier{},
-	// 	&Models.Order{},
-	// 	&Models.OrderItem{},
-	// 	&Models.Shipment{},
-	// 	&Models.ShipmentItem{},
-	// )
+	// ลบตารางเก่า
+	db.Migrator().DropTable(
+		&Models.ShipmentItem{},
+		&Models.Shipment{},
+		&Models.OrderItem{},
+		&Models.Order{},
+	// &Models.ProductUnit{},
+	// &Models.Inventory{},
+	// &Models.Supplier{},
+	// &Models.Product{},
+	// &Models.Branches{},
+	)
 
-	// db.AutoMigrate(&Models.Employees{},
-	// 	&Models.Branches{},
-	// 	&Models.Product{},
-	// 	&Models.ProductUnit{},
-	// 	&Models.Inventory{},
-	// 	&Models.Supplier{},
-	// 	&Models.Order{},
-	// 	&Models.OrderItem{},
-	// 	&Models.Shipment{},
-	// 	&Models.ShipmentItem{})
+	// เรียก AutoMigrate ใหม่ในลำดับที่ถูกต้อง
+	if err := db.AutoMigrate(
+		// &Models.Branches{},
+		// &Models.Product{},
+		// &Models.Supplier{},
+		// &Models.Inventory{},
+		// &Models.ProductUnit{},
+		&Models.Order{},
+		&Models.OrderItem{},
+		// // &Models.Employees{},
+		&Models.Shipment{},
+		&Models.ShipmentItem{},
+	); err != nil {
+		log.Fatalf("Failed to migrate: %v", err)
+	}
+
+	log.Println("Database migration completed successfully.")
 
 	app := fiber.New()
 
@@ -95,21 +103,17 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "http://localhost:3000", // อนุญาต domain frontend
 		AllowMethods: "GET,POST,PUT,DELETE",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
-
-	// app.Post("/create-user", func(c *fiber.Ctx) error {
-	// 	return Func.CreateUser(db, c)
-	// })
 
 	app.Post("/login", Authentication.Login)
 
 	app.Use("/protected", Protected)
 
 	Func.EmployeesRoutes(app, db)
-	Func.BranchesRoutes(app, db, posDB)
+	Func.BranchRoutes(app, db, posDB)
 	Func.ProductRouter(app, db)
-	Func.ProductUnitRouter(app, db)
-	Func.InventoryRoutes(app, db)
+	Func.InventoryRoutes(app, db, posDB)
 	Func.SupplierRoutes(app, db)
 	Func.OrderRoutes(app, db)
 	Func.OrderItemRoutes(app, db)

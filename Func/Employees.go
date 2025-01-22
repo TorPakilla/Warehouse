@@ -11,12 +11,12 @@ import (
 
 func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	type UserRequest struct {
-		Username  string  `json:"username"`
-		Password  string  `json:"password"`
-		Role      string  `json:"role"`
-		Name      string  `json:"name"`
-		BrancheID string  `json:"brancheid"`
-		Salary    float64 `json:"salary"`
+		Username string  `json:"username"`
+		Password string  `json:"password"`
+		Role     string  `json:"role"`
+		Name     string  `json:"name"`
+		BranchID string  `json:"branchid"`
+		Salary   float64 `json:"salary"`
 	}
 
 	var req UserRequest
@@ -24,12 +24,12 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	if req.Username == "" || req.Password == "" || req.Role == "" || req.Name == "" || req.BrancheID == "" {
+	if req.Username == "" || req.Password == "" || req.Role == "" || req.Name == "" || req.BranchID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All fields are required"})
 	}
 
 	var branch Models.Branches
-	if err := db.Where("branche_id = ?", req.BrancheID).First(&branch).Error; err != nil {
+	if err := db.Where("branch_id = ?", req.BranchID).First(&branch).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BrancheID not found"})
 	}
 
@@ -51,12 +51,12 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	user := Models.Employees{
-		Username:  req.Username,
-		Password:  string(hashedPassword),
-		Role:      req.Role,
-		Name:      req.Name,
-		BrancheID: req.BrancheID,
-		Salary:    req.Salary,
+		Username: req.Username,
+		Password: string(hashedPassword),
+		Role:     req.Role,
+		Name:     req.Name,
+		BranchID: req.BranchID,
+		Salary:   req.Salary,
 	}
 
 	if err := db.Create(&user).Error; err != nil {
@@ -105,12 +105,12 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	type UserRequest struct {
-		Username  string  `json:"username"`
-		Password  string  `json:"password"`
-		Role      string  `json:"role"`
-		Name      string  `json:"name"`
-		BrancheID string  `json:"brancheid"`
-		Salary    float64 `json:"salary"`
+		Username string  `json:"username"`
+		Password string  `json:"password"`
+		Role     string  `json:"role"`
+		Name     string  `json:"name"`
+		BranchID string  `json:"branchid"`
+		Salary   float64 `json:"salary"`
 	}
 
 	var req UserRequest
@@ -133,9 +133,9 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	}
 
 	// ตรวจสอบว่า BrancheID มีอยู่ในฐานข้อมูลหรือไม่ (ถ้ามีการส่งมา)
-	if req.BrancheID != "" {
+	if req.BranchID != "" {
 		var branch Models.Branches
-		if err := db.Where("branche_id = ?", req.BrancheID).First(&branch).Error; err != nil {
+		if err := db.Where("branche_id = ?", req.BranchID).First(&branch).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BrancheID not found"})
 		}
 	}
@@ -162,8 +162,8 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	if req.Name != "" {
 		user.Name = req.Name
 	}
-	if req.BrancheID != "" {
-		user.BrancheID = req.BrancheID
+	if req.BranchID != "" {
+		user.BranchID = req.BranchID
 	}
 	if req.Salary != 0 {
 		user.Salary = req.Salary
@@ -202,7 +202,7 @@ func EmployeesRoutes(app *fiber.App, db *gorm.DB) {
 		return FindEmployees(db, c)
 	})
 
-	app.Post("/Employees", Authentication.AuthMiddleware, func(c *fiber.Ctx) error {
+	app.Post("/Employees", func(c *fiber.Ctx) error {
 		return AddEmployees(db, c)
 	})
 

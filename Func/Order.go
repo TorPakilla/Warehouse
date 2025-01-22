@@ -3,24 +3,41 @@ package Func
 import (
 	"Api/Models"
 	"crypto/rand"
-	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/oklog/ulid/v2"
 	"gorm.io/gorm"
 )
+
+type OrderItemRequest struct {
+	ProductID string  `json:"productid" validate:"required"`
+	Quantity  int     `json:"quantity" validate:"required,min=1"`
+	UnitPrice float64 `json:"unitprice" validate:"required,min=0"`
+}
 
 func GenerateULID() string {
 	entropy := ulid.Monotonic(rand.Reader, 0)
 	return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
 }
 
+func parseUUIDPointer(id *string) *uuid.UUID {
+	if id == nil {
+		return nil
+	}
+	u, err := uuid.Parse(*id)
+	if err != nil {
+		return nil
+	}
+	return &u
+}
+
 func AddOrder(db *gorm.DB, c *fiber.Ctx) error {
 	type OrderRequest struct {
-		Status     string `json:"status"`
-		SupplierID string `json:"supplierid"`
-		EmployeeID string `json:"employeeid"`
+		SupplierID  string             `json:"supplier_id" validate:"required"`
+		EmployeesID *string            `json:"employees_id"`
+		OrderItems  []OrderItemRequest `json:"order_items" validate:"required"`
 	}
 
 	var req OrderRequest
@@ -28,45 +45,74 @@ func AddOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	body := make(map[string]interface{})
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	// Verify Supplier
+	var supplier Models.Supplier
+	if err := db.Where("supplier_id = ?", req.SupplierID).First(&supplier).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Supplier not found"})
 	}
 
-	allowedFields := map[string]bool{
-		"supplierid": true,
-		"employeeid": true,
-		"status":     true,
-	}
-
-	for key := range body {
-		if !allowedFields[key] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+	// Verify EmployeesID if provided
+	if req.EmployeesID != nil {
+		var employee Models.Employees
+		if err := db.Where("employees_id = ?", *req.EmployeesID).First(&employee).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Employee not found"})
 		}
 	}
 
-	req.Status = "Pending"
-
-	CheckStatus := map[string]bool{
-		"Pending": true,
-	}
-
-	if !CheckStatus[req.Status] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role. Allowed "})
-	}
-
+	// Create Order (Status is always "Pending")
 	order := Models.Order{
-		Status:     req.Status,
-		SupplierID: req.SupplierID,
-		EmployeeID: req.EmployeeID,
+		OrderID:     uuid.New().String(),
+		OrderNumber: GenerateULID(),
+		Status:      "Pending", // Always set to Pending
+		SupplierID:  uuid.MustParse(req.SupplierID),
+		EmployeesID: parseUUIDPointer(req.EmployeesID),
+		CreatedAt:   time.Now(),
 	}
-
-	order.OrderNumber = GenerateULID()
 
 	if err := db.Create(&order).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order: " + err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order"})
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"New": order})
+
+	// Create OrderItems
+	for _, item := range req.OrderItems {
+		var product Models.Product
+		if err := db.Where("product_id = ?", item.ProductID).First(&product).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found: " + item.ProductID})
+		}
+
+		// Verify convers_rate for the product
+		var productUnit Models.ProductUnit
+		if err := db.Where("product_id = ?", item.ProductID).First(&productUnit).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ProductUnit not found for product: " + item.ProductID})
+		}
+
+		if productUnit.ConversRate == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid convers_rate for product: " + item.ProductID})
+		}
+
+		// Calculate final quantity using convers_rate
+		finalQuantity := item.Quantity * productUnit.ConversRate
+
+		orderItem := Models.OrderItem{
+			OrderItemID: uuid.New().String(),
+			OrderID:     order.OrderID,
+			ProductID:   item.ProductID,
+			Quantity:    finalQuantity,                    // Use the calculated final quantity
+			ConversRate: float64(productUnit.ConversRate), // Store convers_rate in the order item
+			CreatedAt:   time.Now(),
+		}
+
+		if err := db.Create(&orderItem).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order item"})
+		}
+	}
+
+	// Update total amount
+	if err := UpdateTotalAmount(db, order.OrderID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order total amount"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Order created successfully", "data": order})
 }
 
 func UpdateTotalAmount(db *gorm.DB, orderID string) error {
@@ -77,54 +123,35 @@ func UpdateTotalAmount(db *gorm.DB, orderID string) error {
 
 	var totalAmount float64
 	for _, item := range orderItems {
-		totalAmount += float64(item.Quantity) * item.UnitPrice
+		totalAmount += float64(item.Quantity) * item.ConversRate // Use convers_rate for total calculation
 	}
 
-	if err := db.Model(&Models.Order{}).Where("order_id = ?", orderID).Update("total_amount", totalAmount).Error; err != nil {
-		return err
-	}
-
-	return nil
+	return db.Model(&Models.Order{}).Where("order_id = ?", orderID).Update("total_amount", totalAmount).Error
 }
 
 func LookOrders(db *gorm.DB, c *fiber.Ctx) error {
 	var orders []Models.Order
 	if err := db.Find(&orders).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to find orders: " + err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch orders"})
 	}
-	return c.JSON(fiber.Map{"This": "Order", "Data": orders})
+	return c.JSON(fiber.Map{"data": orders})
 }
 
 func FindOrder(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var order Models.Order
-	if err := db.Where("order_id = ?", id).First(&order).Error; err != nil {
+	if err := db.Preload("Supplier").Where("order_id = ?", id).First(&order).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
 	}
-	return c.JSON(fiber.Map{"This": "Order", "Data": order})
+	return c.JSON(fiber.Map{"data": order})
 }
 
 func DeleteOrder(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
-	var order Models.Order
-	if err := db.Where("order_id = ?", id).First(&order).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
+	if err := db.Where("order_id = ?", id).Delete(&Models.Order{}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete order"})
 	}
-	if err := db.Delete(&order).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete order: " + err.Error()})
-	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"Deleted": "Succeed"})
-}
-
-func fetchConversionRate(productUnitID string, db *gorm.DB) (int, error) {
-	var productUnit Models.ProductUnit
-	if err := db.Where("product_unit_id = ?", productUnitID).First(&productUnit).Error; err != nil {
-		return 0, err
-	}
-	if productUnit.ConversRate == nil {
-		return 0, fmt.Errorf("ไม่มีค่าการแปลงสำหรับ Product Unit ID %s", productUnitID)
-	}
-	return *productUnit.ConversRate, nil
+	return c.JSON(fiber.Map{"message": "Order deleted successfully"})
 }
 
 func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
@@ -138,97 +165,43 @@ func UpdateOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only orders with Pending status can be updated"})
 	}
 
-	body := make(map[string]interface{})
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
-	}
-
-	allowedFields := map[string]bool{
-		"supplierid": true,
-		"employeeid": true,
-		"status":     true,
-	}
-
-	for key := range body {
-		if !allowedFields[key] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
-		}
-	}
-
 	var req struct {
 		Status string `json:"status"`
 	}
 
-	if status, ok := body["status"].(string); ok && status != "" {
-		req.Status = status
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	validStatuses := map[string]bool{
-		"Pending":  true,
-		"Approved": true,
-		"Rejected": true,
-	}
-
-	if req.Status != "" && !validStatuses[req.Status] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid status. Allowed statuses: Pending, Approved, Rejected"})
+	validStatuses := map[string]bool{"Pending": true, "Approved": true, "Rejected": true}
+	if !validStatuses[req.Status] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid status"})
 	}
 
 	if req.Status == "Approved" {
-		if err := db.Transaction(func(tx *gorm.DB) error {
-			var orderItems []Models.OrderItem
-			if err := tx.Where("order_id = ?", id).Find(&orderItems).Error; err != nil {
-				return fmt.Errorf("failed to fetch order items: %w", err)
+		var orderItems []Models.OrderItem
+		if err := db.Where("order_id = ?", id).Find(&orderItems).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch order items"})
+		}
+
+		for _, item := range orderItems {
+			if err := db.Model(&Models.Inventory{}).
+				Where("product_id = ?", item.ProductID).
+				UpdateColumn("quantity", gorm.Expr("quantity + ?", item.Quantity)).Error; err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update inventory for product: " + item.ProductID})
 			}
-
-			for _, item := range orderItems {
-				conversionRate, err := fetchConversionRate(item.ProductUnitID, tx)
-				if err != nil {
-					return fmt.Errorf("failed to fetch conversion rate for product unit ID %s: %w", item.ProductUnitID, err)
-				}
-
-				additionalValue := item.Quantity * conversionRate
-				if err := tx.Model(&Models.Inventory{}).
-					Where("product_unit_id = ?", item.ProductUnitID).
-					UpdateColumn("quantity", gorm.Expr("quantity + ?", additionalValue)).Error; err != nil {
-					return fmt.Errorf("failed to update inventory for product unit ID %s: %w", item.ProductUnitID, err)
-				}
-			}
-
-			order.Status = req.Status
-			order.UpdateAt = time.Now()
-			if err := tx.Save(&order).Error; err != nil {
-				return fmt.Errorf("failed to update order status: %w", err)
-			}
-
-			return nil
-		}); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order: " + err.Error()})
 		}
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Order updated successfully",
-	})
+	order.Status = req.Status
+	order.UpdatedAt = time.Now()
+	if err := db.Save(&order).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order status"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Order updated successfully"})
 }
-
 func OrderRoutes(app *fiber.App, db *gorm.DB) {
-	app.Use(func(c *fiber.Ctx) error {
-		role := c.Locals("role")
-		if role != "God" && role != "Manager" && role != "Stock" {
-			return c.Next()
-		}
-
-		if role != "Account" && role != "Audit" {
-			if c.Method() != "GET" {
-				return c.Next()
-			} else {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-			}
-		}
-
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-	})
-
 	app.Get("/Orders", func(c *fiber.Ctx) error {
 		return LookOrders(db, c)
 	})

@@ -3,6 +3,7 @@ package Func
 import (
 	"Api/Models"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,101 +12,118 @@ import (
 
 func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 	type ProductRequest struct {
-		ProductName     string  `json:"productname"`
-		Description     string  `json:"description"`
-		Type            string  `json:"type"`
-		BrancheID       string  `json:"brancheid"`
-		InitialQuantity int     `json:"initialquantity"`
-		Price           float64 `json:"price"`
+		ProductName     string
+		Description     string
+		Type            string
+		BranchID        string
+		InitialQuantity int
+		Price           float64
+		Image           []byte
 	}
 
-	var req ProductRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	req := ProductRequest{}
+	req.ProductName = c.FormValue("product_name")
+	req.Description = c.FormValue("description")
+	req.Type = c.FormValue("type")
+	req.BranchID = c.FormValue("branch_id")
+
+	// แปลง initial_quantity
+	initialQuantity, err := strconv.Atoi(c.FormValue("initial_quantity"))
+	if err != nil || initialQuantity <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid initial_quantity"})
+	}
+	req.InitialQuantity = initialQuantity
+
+	// แปลง price
+	price, err := strconv.ParseFloat(c.FormValue("price"), 64)
+	if err != nil || price <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid price"})
+	}
+	req.Price = price
+
+	// Handle file upload
+	file, err := c.FormFile("image")
+	if err == nil && file != nil {
+		fileContent, err := file.Open()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open uploaded file"})
+		}
+		defer fileContent.Close()
+
+		req.Image, err = io.ReadAll(fileContent)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to read uploaded file"})
+		}
 	}
 
-	// Validate fields
-	if req.ProductName == "" || req.Type == "" || req.BrancheID == "" || req.InitialQuantity <= 0 || req.Price <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All fields are required and must have valid values"})
-	}
-
-	// Create Product
+	// 1. สร้าง Product
 	product := Models.Product{
 		ProductName: req.ProductName,
 		Description: req.Description,
+		Image:       req.Image,
 		CreatedAt:   time.Now(),
 	}
+
+	// บันทึก Product ลงในฐานข้อมูล
 	if err := db.Create(&product).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product: " + err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product"})
 	}
 
-	// Determine Conversion Rate based on Type
-	var conversRate *int
-	if req.Type == "Pallet" {
-		conversRate = new(int)
-		*conversRate = 30
-	} else if req.Type == "Box" {
-		conversRate = new(int)
-		*conversRate = 12
+	// ดึง Product ที่บันทึกลงฐานข้อมูล
+	if err := db.Last(&product).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch created product"})
 	}
 
-	// Create Product Unit
+	// 2. กำหนด ConversRate ตามประเภทของสินค้า
+	var conversRate int
+	switch req.Type {
+	case "Pallet":
+		conversRate = 12
+	case "Box":
+		conversRate = 6
+	case "Pieces":
+		conversRate = 1
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid type"})
+	}
+
+	// 3. สร้าง ProductUnit ที่เชื่อมโยงกับ Product ที่สร้างขึ้น
 	productUnit := Models.ProductUnit{
-		ProductID:   product.ProductID,
-		Type:        req.Type,
-		ConversRate: conversRate,
+		ProductID:       product.ProductID,
+		Type:            req.Type,
+		InitialQuantity: req.InitialQuantity,
+		ConversRate:     conversRate,
+		CreatedAt:       time.Now(),
 	}
+
+	// บันทึก ProductUnit ลงในฐานข้อมูล
 	if err := db.Create(&productUnit).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product unit: " + err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product unit"})
 	}
 
-	// Create Inventory
+	// 4. คำนวณและสร้าง Inventory ที่เชื่อมโยงกับ Product และ ProductUnit
+	calculatedQuantity := req.InitialQuantity * conversRate
 	inventory := Models.Inventory{
-		ProductUnitID: productUnit.ProductUnitID,
-		BrancheID:     req.BrancheID,
-		Quantity:      req.InitialQuantity,
-		Price:         req.Price,
-		CreatedAt:     time.Now(),
-	}
-	if err := db.Create(&inventory).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create inventory: " + err.Error()})
+		ProductID: product.ProductID,
+		BranchID:  req.BranchID, // เพิ่ม branch_id ใน Inventory
+		Quantity:  calculatedQuantity,
+		Price:     req.Price,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
+	// บันทึก Inventory ลงในฐานข้อมูล
+	if err := db.Create(&inventory).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create inventory"})
+	}
+
+	// 5. ส่งผลลัพธ์สำเร็จ
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message":     "Product, Product Unit, and Inventory created successfully",
 		"product":     product,
 		"productUnit": productUnit,
 		"inventory":   inventory,
 	})
-}
-
-func LookProduct(db *gorm.DB, c *fiber.Ctx) error {
-	var products []Models.Product
-	if err := db.Find(&products).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to find products: " + err.Error()})
-	}
-	return c.JSON(fiber.Map{"This": "Product", "Data": products})
-}
-
-func FindProduct(db *gorm.DB, c *fiber.Ctx) error {
-	id := c.Params("id")
-	var product Models.Product
-	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
-	}
-	return c.JSON(fiber.Map{"This": "Product", "Data": product})
-}
-
-func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
-	id := c.Params("id")
-	var product Models.Product
-	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
-	}
-	if err := db.Delete(&product).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete product: " + err.Error()})
-	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"Deleted": product})
 }
 
 func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
@@ -115,12 +133,11 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 
-	productName := c.FormValue("productname")
+	productName := c.FormValue("product_name")
 	description := c.FormValue("description")
-	productType := c.FormValue("type")
 
-	if productName == "" || productType == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product name and type are required"})
+	if productName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product name is required"})
 	}
 
 	// Handle file upload
@@ -130,14 +147,14 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open uploaded file"})
 		}
-		defer fileContent.Close() // ปิดไฟล์หลังอ่านเสร็จ
+		defer fileContent.Close()
 
 		fileBytes, err := io.ReadAll(fileContent)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to read uploaded file"})
 		}
 
-		product.Image = fileBytes // อัปเดตรูปภาพในฐานข้อมูล
+		product.Image = fileBytes
 	}
 
 	product.ProductName = productName
@@ -147,82 +164,42 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update product: " + err.Error()})
 	}
 
-	// อัปเดต ProductUnit
-	var productUnit Models.ProductUnit
-	if err := db.Where("product_id = ?", id).First(&productUnit).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product unit not found"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"product": product})
+}
+
+func LookProducts(db *gorm.DB, c *fiber.Ctx) error {
+	var products []Models.Product
+	if err := db.Find(&products).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
+	}
+	return c.JSON(fiber.Map{"products": products})
+}
+
+func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
+	id := c.Params("id")
+	var product Models.Product
+	if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 
-	productUnit.Type = productType
-	if productType == "Pallet" {
-		productUnit.ConversRate = new(int)
-		*productUnit.ConversRate = 30
-	} else if productType == "Box" {
-		productUnit.ConversRate = new(int)
-		*productUnit.ConversRate = 12
-	} else {
-		productUnit.ConversRate = nil
+	if err := db.Delete(&product).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete product"})
 	}
 
-	if err := db.Save(&productUnit).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update product unit: " + err.Error()})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"product": product, "productUnit": productUnit})
+	return c.JSON(fiber.Map{"message": "Product deleted successfully"})
 }
 
 func ProductRouter(app fiber.Router, db *gorm.DB) {
-	app.Use(func(c *fiber.Ctx) error {
-		role := c.Locals("role")
-		if role != "God" && role != "Manager" && role != "Stock" {
-			return c.Next()
-		}
-
-		if role != "Account" && role != "Audit" {
-			if c.Method() != "GET" {
-				return c.Next()
-			} else {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-			}
-		}
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-	})
-
 	app.Post("/Product", func(c *fiber.Ctx) error {
 		return AddProductWithInventory(db, c)
 	})
-
 	app.Get("/Product", func(c *fiber.Ctx) error {
-		var products []Models.Product
-		if err := db.Find(&products).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
-		}
-		return c.JSON(fiber.Map{"products": products})
+		return LookProducts(db, c)
 	})
-
-	app.Get("/Product/:id", func(c *fiber.Ctx) error {
-		id := c.Params("id")
-		var product Models.Product
-		if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
-		}
-		return c.JSON(fiber.Map{"product": product})
-	})
-
 	app.Put("/Product/:id", func(c *fiber.Ctx) error {
-		// Add update logic if needed
-		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"message": "Not implemented yet"})
+		return UpdateProduct(db, c)
 	})
-
 	app.Delete("/Product/:id", func(c *fiber.Ctx) error {
-		id := c.Params("id")
-		var product Models.Product
-		if err := db.Where("product_id = ?", id).First(&product).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
-		}
-		if err := db.Delete(&product).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete product"})
-		}
-		return c.JSON(fiber.Map{"message": "Product deleted successfully"})
+		return DeleteProduct(db, c)
 	})
 }
