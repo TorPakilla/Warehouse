@@ -8,10 +8,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// AddBranches adds a new branch.
+// เพื่ม สาขา
 func AddBranches(db *gorm.DB, c *fiber.Ctx) error {
 	type Request struct {
-		BName    string `json:"b_name" validate:"required"` // เปลี่ยนจาก bname เป็น b_name
+		BName    string `json:"b_name" validate:"required"`
 		Location string `json:"location" validate:"required"`
 	}
 
@@ -36,7 +36,7 @@ func AddBranches(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"new_branch": branch})
 }
 
-// UpdateBranches updates a branch by its ID
+// อัพเดต สาขา
 func UpdateBranches(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -54,7 +54,6 @@ func UpdateBranches(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format"})
 	}
 
-	// Update fields in the branch
 	if err := db.Model(&branch).Updates(body).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update branch"})
 	}
@@ -62,7 +61,7 @@ func UpdateBranches(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Branch updated successfully", "branch": branch})
 }
 
-// LookBranch retrieves all branches.
+// ดู สาขา
 func LookBranch(db *gorm.DB, c *fiber.Ctx) error {
 	var branches []Models.Branches
 	if err := db.Find(&branches).Error; err != nil {
@@ -71,7 +70,7 @@ func LookBranch(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"branches": branches})
 }
 
-// FindBranches retrieves a branch by its ID.
+// ดู สาขา แต่ตาม ID
 func FindBranches(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var branch Models.Branches
@@ -81,7 +80,7 @@ func FindBranches(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"branch": branch})
 }
 
-// DeleteBranches deletes a branch by its ID.
+// ลบ สาขา
 func DeleteBranches(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var branch Models.Branches
@@ -96,7 +95,7 @@ func DeleteBranches(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Branch deleted successfully"})
 }
 
-// GetWarehouseInventory retrieves inventory for a specific branch ID.
+// ดึงข้อมูลสาขาใน Inventory เพื่ออ้างอิงข้อมูลสินค้าในสาขา Warehouse
 func GetWarehouseInventory(db *gorm.DB, c *fiber.Ctx) error {
 	branchID := c.Query("branchId")
 	if branchID == "" {
@@ -111,6 +110,7 @@ func GetWarehouseInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"inventoryItems": inventoryItems})
 }
 
+// ดึงข้อมูลสาขาใน Inventory เพื่ออ้างอิงข้อมูลสินค้าในสาขา Pos
 func GetPOSInventory(posDB *gorm.DB, c *fiber.Ctx) error {
 	branchID := c.Query("branchId")
 	if branchID == "" {
@@ -135,6 +135,7 @@ func GetPOSInventory(posDB *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"inventoryItems": inventoryItems})
 }
 
+// ดึงข้อมูลสาขาของ Pos
 func GetPOSBranches(posDB *gorm.DB, c *fiber.Ctx) error {
 	var branches []struct {
 		BranchID string `json:"branch_id"`
@@ -142,7 +143,6 @@ func GetPOSBranches(posDB *gorm.DB, c *fiber.Ctx) error {
 		Location string `json:"location"`
 	}
 
-	// ดึงข้อมูลทั้งหมดจากตาราง Branches ของฐานข้อมูล POS
 	if err := posDB.Table("Branches").Select("branch_id, b_name, location").Find(&branches).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch POS branches", "details": err.Error()})
 	}
@@ -155,7 +155,7 @@ func GetPOSBranches(posDB *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"branches": branches})
 }
 
-// GetWarehouseBranches retrieves Warehouse branches only.
+// ดึงข้อมูลสาขาของ Warehouse
 func GetWarehouseBranches(db *gorm.DB, c *fiber.Ctx) error {
 	var branches []struct {
 		BranchID string `json:"branch_id"`
@@ -163,12 +163,10 @@ func GetWarehouseBranches(db *gorm.DB, c *fiber.Ctx) error {
 		Location string `json:"location"`
 	}
 
-	// ดึงข้อมูลทั้งหมดจากตาราง Branches ของฐานข้อมูล Warehouse
 	if err := db.Table("Branches").Select("branch_id, b_name, location").Find(&branches).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch Warehouse branches", "details": err.Error()})
 	}
 
-	// ตรวจสอบว่ามีข้อมูลหรือไม่
 	if len(branches) == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"message": "No Warehouse branches found"})
 	}

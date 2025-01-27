@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// AddShipmentItem handles adding a new shipment item
+// เพิ่มข้อมูล ShipmentItem
 func AddShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	type ShipmentItemRequest struct {
 		ShipmentID           string `json:"shipmentID" validate:"required"`
@@ -31,13 +31,12 @@ func AddShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 
 	log.Println("Received Request:", req)
 
-	// ตรวจสอบว่า Shipment มีอยู่หรือไม่
 	var existingShipment Models.Shipment
 	err := db.Where("shipment_id = ?", req.ShipmentID).First(&existingShipment).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			log.Println("Shipment not found, creating new shipment:", req.ShipmentID)
-			// ถ้าไม่มี Shipment ให้สร้างใหม่โดยใช้ ShipmentID ที่ส่งมาจาก client
+
 			newShipment := Models.Shipment{
 				ShipmentID:     req.ShipmentID, // ใช้ ShipmentID เดิม
 				ShipmentNumber: fmt.Sprintf("SH-%d", time.Now().UnixNano()),
@@ -59,9 +58,8 @@ func AddShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 		}
 	}
 
-	// เพิ่ม ShipmentItem
 	shipmentItem := Models.ShipmentItem{
-		ShipmentID:           existingShipment.ShipmentID, // ใช้ ShipmentID ที่ตรวจสอบแล้ว
+		ShipmentID:           existingShipment.ShipmentID,
 		ProductUnitID:        req.ProductID,
 		WarehouseInventoryID: req.WarehouseInventoryID,
 		PosInventoryID:       req.POSInventoryID,
@@ -77,7 +75,7 @@ func AddShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Shipment and item added successfully", "data": shipmentItem})
 }
 
-// LookShipmentItems fetches all shipment items
+// ดูข้อมูล ShipmentItem ทั้งหมด
 func LookShipmentItems(db *gorm.DB, c *fiber.Ctx) error {
 	var shipmentItems []Models.ShipmentItem
 	if err := db.Find(&shipmentItems).Error; err != nil {
@@ -86,7 +84,7 @@ func LookShipmentItems(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": shipmentItems})
 }
 
-// FindShipmentItem fetches a shipment item by ID
+// หาข้อมูล ShipmentItem ตาม ID
 func FindShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var shipmentItem Models.ShipmentItem
@@ -96,7 +94,7 @@ func FindShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": shipmentItem})
 }
 
-// DeleteShipmentItem deletes a shipment item by ID
+// ลบข้อมูล ShipmentItem ตาม ID
 func DeleteShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var shipmentItem Models.ShipmentItem
@@ -109,7 +107,7 @@ func DeleteShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Shipment item deleted successfully"})
 }
 
-// UpdateShipmentItem updates an existing shipment item
+// อัพเดทข้อมูล ShipmentItem
 func UpdateShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var shipmentItem Models.ShipmentItem
@@ -138,9 +136,7 @@ func UpdateShipmentItem(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Shipment item updated successfully", "data": shipmentItem})
 }
 
-// ShipmentItemRoutes sets up routes for shipment item operations
 func ShipmentItemRoutes(app *fiber.App, db *gorm.DB) {
-	// Define routes for CRUD operations on shipment items
 	app.Get("/ShipmentItems", func(c *fiber.Ctx) error {
 		return LookShipmentItems(db, c)
 	})

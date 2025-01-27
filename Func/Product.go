@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// สร้าง Product พร้อมกับ Inventory และ ProductUnit
 func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 	type ProductRequest struct {
 		ProductName     string
@@ -41,7 +42,6 @@ func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 	}
 	req.Price = price
 
-	// Handle file upload
 	file, err := c.FormFile("image")
 	if err == nil && file != nil {
 		fileContent, err := file.Open()
@@ -64,12 +64,10 @@ func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 		CreatedAt:   time.Now(),
 	}
 
-	// บันทึก Product ลงในฐานข้อมูล
 	if err := db.Create(&product).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product"})
 	}
 
-	// ดึง Product ที่บันทึกลงฐานข้อมูล
 	if err := db.Last(&product).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch created product"})
 	}
@@ -96,7 +94,6 @@ func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 		CreatedAt:       time.Now(),
 	}
 
-	// บันทึก ProductUnit ลงในฐานข้อมูล
 	if err := db.Create(&productUnit).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product unit"})
 	}
@@ -105,19 +102,17 @@ func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 	calculatedQuantity := req.InitialQuantity * conversRate
 	inventory := Models.Inventory{
 		ProductID: product.ProductID,
-		BranchID:  req.BranchID, // เพิ่ม branch_id ใน Inventory
+		BranchID:  req.BranchID,
 		Quantity:  calculatedQuantity,
 		Price:     req.Price,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	// บันทึก Inventory ลงในฐานข้อมูล
 	if err := db.Create(&inventory).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create inventory"})
 	}
 
-	// 5. ส่งผลลัพธ์สำเร็จ
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message":     "Product, Product Unit, and Inventory created successfully",
 		"product":     product,
@@ -126,6 +121,7 @@ func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
 	})
 }
 
+// อัปเดต Product
 func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var product Models.Product
@@ -140,7 +136,6 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product name is required"})
 	}
 
-	// Handle file upload
 	file, err := c.FormFile("image")
 	if err == nil && file != nil {
 		fileContent, err := file.Open()
@@ -167,6 +162,7 @@ func UpdateProduct(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"product": product})
 }
 
+// ดึงข้อมูล Product ทั้งหมด
 func LookProducts(db *gorm.DB, c *fiber.Ctx) error {
 	var products []Models.Product
 	if err := db.Find(&products).Error; err != nil {
@@ -175,6 +171,7 @@ func LookProducts(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"products": products})
 }
 
+// ดึงข้อมูล ProductUnit ทั้งหมด
 func LookProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 	var products []Models.ProductUnit
 	if err := db.Find(&products).Error; err != nil {
@@ -183,6 +180,7 @@ func LookProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"products": products})
 }
 
+// ลบ Product
 func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var product Models.Product

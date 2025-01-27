@@ -39,7 +39,7 @@ func (Request) TableName() string {
 	return "Requests"
 }
 
-// เพิ่ม Shipment ใหม่
+// เพิ่ม Shipment ใหม่ พร้อมกับ Request ใน POS
 func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	type ShipmentRequest struct {
 		FromBranchID string `json:"from_branch_id" validate:"required"`
@@ -134,7 +134,7 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 
 // อัพเดตสถานะของ Shipment
 func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
-	id := c.Params("id") // รับ Shipment ID
+	id := c.Params("id")
 	var shipment Models.Shipment
 
 	if err := db.Where("shipment_id = ?", id).First(&shipment).Error; err != nil {
@@ -205,7 +205,6 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		}
 	}
 
-	// อัปเดตสถานะของ Shipment
 	shipment.Status = req.Status
 	shipment.UpdatedAt = time.Now()
 	if err := db.Save(&shipment).Error; err != nil {
@@ -220,6 +219,7 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	})
 }
 
+// อัพเดตสถานะของ Shipment ที่มีสถานะ Approved ให้เป็น Completed แบบอัตโนมัต
 func AutoUpdateShipments(db *gorm.DB) error {
 	var shipments []Models.Shipment
 
@@ -258,12 +258,13 @@ func AutoUpdateShipments(db *gorm.DB) error {
 	return nil
 }
 
+// แคช RequestID ที่หาไม่เจอในรอบก่อนหน้า
 var notFoundRequests = make(map[uuid.UUID]bool)
 
+// อัปเดตสถานะของ Request ใน Warehouse ให้ตรงกับ POS
 func SyncRequestStatusWithWarehouse(db *gorm.DB, posDB *gorm.DB) error {
 	var requests []Request
 
-	// ดึงข้อมูล Requests ที่มีสถานะเปลี่ยนแปลง (complete หรือ reject)
 	if err := posDB.Where("status IN ?", []string{"complete", "reject"}).Find(&requests).Error; err != nil {
 		return err
 	}
@@ -327,6 +328,7 @@ func SyncRequestStatusWithWarehouse(db *gorm.DB, posDB *gorm.DB) error {
 	return nil
 }
 
+// ตัวจับเวลาสำหรับการ Sync สถานะของ Request ระหว่าง Warehouse และ POS แบบอัตโนมัต
 func StartSyncScheduler(db *gorm.DB, posDB *gorm.DB) {
 	scheduler := gocron.NewScheduler(time.UTC)
 
@@ -341,6 +343,7 @@ func StartSyncScheduler(db *gorm.DB, posDB *gorm.DB) {
 	scheduler.StartAsync()
 }
 
+// ดึงข้อมูล Shipment ทั้งหมด
 func LookShipments(db *gorm.DB, c *fiber.Ctx) error {
 	var shipments []Models.Shipment
 	if err := db.Find(&shipments).Error; err != nil {
@@ -354,6 +357,7 @@ func LookShipments(db *gorm.DB, c *fiber.Ctx) error {
 	})
 }
 
+// ดึงข้อมูล Shipment ตาม ID
 func FindShipment(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var shipment Models.Shipment
@@ -363,6 +367,7 @@ func FindShipment(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"Shipment": shipment})
 }
 
+// ลบ Shipment
 func DeleteShipment(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var shipment Models.Shipment
@@ -376,29 +381,6 @@ func DeleteShipment(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func ShipmentRoutes(app *fiber.App, db *gorm.DB, posDB *gorm.DB) {
-	app.Use(func(c *fiber.Ctx) error {
-		role := c.Locals("role")
-		if role != "God" && role != "Manager" && role != "Stock" {
-			return c.Next()
-		}
-
-		if role != "Account" {
-			if c.Method() != "GET" && c.Method() != "UPDATE" {
-				return c.Next()
-			} else {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-			}
-		}
-
-		if role != "Audit" {
-			if c.Method() != "GET" {
-				return c.Next()
-			} else {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-			}
-		}
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-	})
 
 	app.Get("/Shipments", func(c *fiber.Ctx) error {
 		return LookShipments(db, c)

@@ -3,7 +3,6 @@ package Func
 import (
 	"Api/Authentication"
 	"Api/Models"
-	"fmt"
 	"strings"
 	"time"
 
@@ -20,7 +19,7 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		Password string  `json:"password"`
 		Role     string  `json:"role"`
 		Name     string  `json:"name"`
-		BranchID string  `json:"branch_id"` // UUID ในรูปแบบ string
+		BranchID string  `json:"branch_id"`
 		Salary   float64 `json:"salary"`
 	}
 
@@ -28,9 +27,6 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
-
-	// Debug: Log ข้อมูลที่ได้รับ
-	fmt.Printf("Received request: %+v\n", req)
 
 	// ตรวจสอบค่าที่ว่าง
 	if strings.TrimSpace(req.Username) == "" ||
@@ -41,13 +37,11 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All fields are required"})
 	}
 
-	// ตรวจสอบ BranchID เป็น UUID
 	branchUUID, err := uuid.Parse(req.BranchID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid BranchID format. Must be a valid UUID"})
 	}
 
-	// ตรวจสอบว่า BranchID มีอยู่ในฐานข้อมูลหรือไม่
 	var branch Models.Branches
 	if err := db.Table("Branches").Where("branch_id = ?", branchUUID).First(&branch).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "BranchID not found"})
@@ -59,7 +53,6 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password: " + err.Error()})
 	}
 
-	// สร้างข้อมูลพนักงานใหม่
 	user := Models.Employees{
 		EmployeesID: uuid.New(),
 		Username:    req.Username,
@@ -71,16 +64,14 @@ func AddEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		CreatedAt:   time.Now(),
 	}
 
-	// บันทึกข้อมูลลงฐานข้อมูล
 	if err := db.Table("Employees").Create(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create employee: " + err.Error()})
 	}
 
-	// ส่งข้อมูลพนักงานใหม่กลับไป
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Employee created successfully", "employee": user})
 }
 
-// ฟังก์ชันดึงข้อมูลพนักงาน
+// ดึงข้อมูลพนักงาน
 func LookEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	var employees []Models.Employees
 
@@ -93,12 +84,11 @@ func LookEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"Data": employees})
 }
 
-// ฟังก์ชันแก้ไขพนักงาน
+// แก้ไขพนักงาน
 func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var user Models.Employees
 
-	// ตรวจสอบว่าผู้ใช้มีอยู่หรือไม่
 	if err := db.Table("Employees").Where("employees_id = ?", id).First(&user).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
@@ -145,7 +135,6 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 		user.Salary = req.Salary
 	}
 
-	// บันทึกข้อมูล
 	if err := db.Table("Employees").Save(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update employee: " + err.Error()})
 	}
@@ -153,6 +142,7 @@ func UpdateEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Employee updated successfully", "user": user})
 }
 
+// ลบพนักงาน
 func DeleteEmployees(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var user Models.Employees

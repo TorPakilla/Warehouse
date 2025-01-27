@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// AddInventory เพิ่มข้อมูล Inventory
+// เพิ่มข้อมูล Inventory
 func AddInventory(db *gorm.DB, c *fiber.Ctx) error {
 	type InventoryRequest struct {
 		ProductID string  `json:"product_id" validate:"required"`
@@ -39,7 +39,7 @@ func AddInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Inventory created successfully", "data": inventory})
 }
 
-// UpdateInventory อัปเดตข้อมูล Inventory
+// อัปเดตข้อมูล Inventory
 func UpdateInventory(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var inventory Models.Inventory
@@ -75,7 +75,7 @@ func UpdateInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Inventory updated successfully", "data": inventory})
 }
 
-// LookInventory ดึงข้อมูล Inventory ทั้งหมด
+// ดึงข้อมูล Inventory ทั้งหมด
 func LookInventory(db *gorm.DB, c *fiber.Ctx) error {
 	var inventories []Models.Inventory
 	if err := db.Find(&inventories).Error; err != nil {
@@ -85,7 +85,7 @@ func LookInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": inventories})
 }
 
-// FindInventory ค้นหาข้อมูล Inventory
+// ค้นหาข้อมูล Inventory
 func FindInventory(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var inventory Models.Inventory
@@ -96,7 +96,7 @@ func FindInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": inventory})
 }
 
-// DeleteInventory ลบข้อมูล Inventory
+// ลบข้อมูล Inventory
 func DeleteInventory(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var inventory Models.Inventory
@@ -109,7 +109,7 @@ func DeleteInventory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Inventory deleted successfully"})
 }
 
-// GetInventoriesByBranch ดึงข้อมูล Inventory ตาม Branch ID
+// ดึงข้อมูล Inventory ตาม Branch ID
 func GetInventoriesByBranch(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	branchID := c.Query("branch_id")
 	if branchID == "" {
@@ -128,11 +128,10 @@ func GetInventoriesByBranch(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"inventories": inventories})
 	}
 
-	// หากไม่มีข้อมูลทั้งใน Warehouse และ POS
 	return c.JSON(fiber.Map{"inventories": []interface{}{}})
 }
 
-// GetBranchesWithInventory ดึง Branches ที่มี Inventory
+// ดึง Branches ที่มี Inventory
 func GetBranchesWithInventory(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	var warehouseBranches []struct {
 		BranchID   string `json:"branch_id"`
@@ -175,7 +174,6 @@ func GetBranchesWithInventory(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	})
 }
 
-// InventoryRoutes ตั้งค่าเส้นทางของ Inventory API
 func InventoryRoutes(app *fiber.App, db *gorm.DB, posDB *gorm.DB) {
 	app.Get("/BranchesWithInventory", func(c *fiber.Ctx) error {
 		return GetBranchesWithInventory(db, posDB, c)

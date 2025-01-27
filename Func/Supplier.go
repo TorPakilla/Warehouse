@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// เพิ่มข้อมูล Supplier
 func AddSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	type SupplierRequest struct {
 		Name        string  `json:"name"`
@@ -49,6 +50,7 @@ func AddSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Supplier created successfully", "data": supplier})
 }
 
+// ดูข้อมูล Supplier
 func LookSuppliers(db *gorm.DB, c *fiber.Ctx) error {
 	var suppliers []Models.Supplier
 	if err := db.Find(&suppliers).Error; err != nil {
@@ -57,6 +59,7 @@ func LookSuppliers(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": suppliers})
 }
 
+// หาข้อมูล Supplier ตาม ID
 func FindSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var supplier Models.Supplier
@@ -66,6 +69,7 @@ func FindSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": supplier})
 }
 
+// อัพเดตข้อมูล Supplier
 func UpdateSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var supplier Models.Supplier
@@ -111,6 +115,7 @@ func UpdateSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Supplier updated successfully", "data": supplier})
 }
 
+// ลบข้อมูล Supplier ตาม ID
 func DeleteSupplier(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var supplier Models.Supplier
@@ -124,22 +129,6 @@ func DeleteSupplier(db *gorm.DB, c *fiber.Ctx) error {
 }
 
 func SupplierRoutes(app *fiber.App, db *gorm.DB) {
-	app.Use(func(c *fiber.Ctx) error {
-		role := c.Locals("role")
-		if role != "God" && role != "Manager" {
-			return c.Next()
-		}
-
-		if role != "Stock" && role != "Accountant" && role != "Audit" {
-			if c.Method() != "GET" {
-				return c.Next()
-			} else {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-			}
-		}
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "Permission Denied"})
-	})
-
 	app.Get("/Supplier", func(c *fiber.Ctx) error {
 		return LookSuppliers(db, c)
 	})

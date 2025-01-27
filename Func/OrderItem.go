@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// AddOrderItem สร้างรายการคำสั่งซื้อ
 func AddOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 	type OrderItemRequest struct {
 		OrderID     string  `json:"orderid" validate:"required"`
@@ -27,7 +28,6 @@ func AddOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 		ConversRate: req.ConversRate,
 	}
 
-	// สร้าง OrderItem
 	if err := db.Create(&orderItem).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถสร้างรายการคำสั่งซื้อได้: " + err.Error()})
 	}
@@ -60,7 +60,7 @@ func DeleteOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "รายการคำสั่งซื้อถูกลบสำเร็จ"})
 }
 
-// UpdateOrderItem handles updating an order item
+// อัปเดตยอดรวมของ Order
 func UpdateOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var orderItem Models.OrderItem
@@ -94,6 +94,7 @@ func UpdateOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Order item updated successfully", "data": orderItem})
 }
 
+// ดูรายการคำสั่งซื้อทั้งหมด
 func LookOrderItems(db *gorm.DB, c *fiber.Ctx) error {
 	var orderItems []Models.OrderItem
 	if err := db.Find(&orderItems).Error; err != nil {
@@ -102,6 +103,7 @@ func LookOrderItems(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": orderItems})
 }
 
+// ดูรายการคำสั่งซื้อตาม ID
 func FindOrderItem(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var orderItem Models.OrderItem
