@@ -167,12 +167,12 @@ func (s *OrderItem) BeforeCreate(tx *gorm.DB) (err error) {
 
 // Shipment model
 type Shipment struct {
-	ShipmentID     string    `gorm:"type:uuid;primaryKey" json:"shipment_id"`
+	ShipmentID     string    `gorm:"column:shipment_id;primaryKey;type:uuid;not null" json:"shipment_id"`
 	ShipmentNumber string    `json:"shipment_number"`
-	FromBranchID   string    `gorm:"type:uuid" json:"from_branch_id"`
-	ToBranchID     string    `gorm:"type:uuid" json:"to_branch_id"`
-	ShipmentDate   time.Time `json:"shipment_date"`
+	FromBranchID   string    `json:"from_branch_id"`
+	ToBranchID     string    `json:"to_branch_id"`
 	Status         string    `json:"status"`
+	ShipmentDate   time.Time `json:"shipment_date"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
@@ -188,11 +188,11 @@ func (s *Shipment) BeforeCreate(tx *gorm.DB) (err error) {
 
 // ShipmentItem model
 type ShipmentItem struct {
-	ShipmentListID       string    `gorm:"type:uuid;primaryKey" json:"shipment_list_id"`
-	ShipmentID           string    `gorm:"type:uuid" json:"shipment_id"`
-	ProductUnitID        string    `gorm:"type:uuid" json:"product_unit_id"`
-	WarehouseInventoryID string    `gorm:"type:uuid" json:"warehouse_inventory_id"`
-	PosInventoryID       string    `gorm:"type:uuid" json:"pos_inventory_id"`
+	ShipmentListID       string    `gorm:"primaryKey;type:uuid" json:"shipment_list_id"`
+	ShipmentID           string    `json:"shipment_id"`
+	WarehouseInventoryID string    `json:"warehouse_inventory_id"`
+	PosInventoryID       string    `json:"pos_inventory_id"`
+	ProductUnitID        string    `json:"product_unit_id"`
 	Status               string    `json:"status"`
 	Quantity             int       `json:"quantity"`
 	CreatedAt            time.Time `json:"created_at"`

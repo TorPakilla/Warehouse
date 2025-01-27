@@ -175,6 +175,14 @@ func LookProducts(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"products": products})
 }
 
+func LookProductUnit(db *gorm.DB, c *fiber.Ctx) error {
+	var products []Models.ProductUnit
+	if err := db.Find(&products).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch ProductUnit"})
+	}
+	return c.JSON(fiber.Map{"products": products})
+}
+
 func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
 	id := c.Params("id")
 	var product Models.Product
@@ -196,6 +204,11 @@ func ProductRouter(app fiber.Router, db *gorm.DB) {
 	app.Get("/Product", func(c *fiber.Ctx) error {
 		return LookProducts(db, c)
 	})
+
+	app.Get("/ProductUnit", func(c *fiber.Ctx) error {
+		return LookProductUnit(db, c)
+	})
+
 	app.Put("/Product/:id", func(c *fiber.Ctx) error {
 		return UpdateProduct(db, c)
 	})

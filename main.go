@@ -8,6 +8,7 @@ import (
 
 	"Api/Authentication"
 	"Api/Func"
+	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -55,18 +56,7 @@ func main() {
 	}
 	log.Println("Connected to POS database!")
 
-	// go func() {
-	// 	log.Println("Starting synchronization between POS and Warehouse...")
-	// 	for {
-	// 		if err := Func.SyncRequestStatusWithWarehouse(db, posDB); err != nil {
-	// 			log.Println("Error syncing requests:", err)
-	// 		} else {
-	// 			log.Println("Requests synced successfully")
-	// 		}
-	// 		time.Sleep(5 * time.Second) // Repeat every 5 seconds
-	// 	}
-	// }()
-
+	go Func.StartSyncScheduler(db, posDB)
 	// Initialize Fiber app
 	app := fiber.New()
 
@@ -82,8 +72,8 @@ func main() {
 	})
 
 	db.Migrator().DropTable(
-	// &Models.ShipmentItem{},
-	// &Models.Shipment{},
+		&Models.ShipmentItem{},
+		&Models.Shipment{},
 	// &Models.OrderItem{},
 	// &Models.Order{},
 	// &Models.ProductUnit{},
@@ -95,16 +85,16 @@ func main() {
 
 	// สร้างตารางใหม่ตามลำดับ
 	if err := db.AutoMigrate(
-	// &Models.Branches{},
-	// &Models.Product{},
-	// &Models.Supplier{},
-	// &Models.Inventory{},
-	// &Models.ProductUnit{},
-	// &Models.Order{},
-	// &Models.OrderItem{},
-	// &Models.Employees{},
-	// &Models.Shipment{},
-	// &Models.ShipmentItem{},
+		// &Models.Branches{},
+		// &Models.Product{},
+		// &Models.Supplier{},
+		// &Models.Inventory{},
+		// &Models.ProductUnit{},
+		// &Models.Order{},
+		// &Models.OrderItem{},
+		// &Models.Employees{},
+		&Models.Shipment{},
+		&Models.ShipmentItem{},
 	); err != nil {
 		log.Fatalf("Failed to migrate: %v", err)
 	}

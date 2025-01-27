@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -46,7 +47,7 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		Items        []struct {
 			WarehouseInventoryID string      `json:"warehouse_inventory_id" validate:"required"`
 			PosInventoryID       string      `json:"pos_inventory_id" validate:"required"`
-			ProductUnitID        string      `json:"product_unit_id"` // optional
+			ProductUnitID        string      `json:"product_unit_id"`
 			Quantity             json.Number `json:"quantity" validate:"required"`
 		} `json:"items" validate:"required,dive"`
 	}
@@ -56,18 +57,14 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format", "details": err.Error()})
 	}
 
-	// Check required fields
 	if req.FromBranchID == "" || req.ToBranchID == "" || len(req.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "FromBranchID, ToBranchID, and Items are required"})
 	}
 
-	// Generate ShipmentID once
 	shipmentID := uuid.New()
-	log.Printf("Generated ShipmentID: %s\n", shipmentID.String())
+	log.Printf("Generated ShipmentID: %s", shipmentID.String())
 
-	// Start transaction
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		// Create Shipment
 		shipment := Models.Shipment{
 			ShipmentID:     shipmentID.String(),
 			ShipmentNumber: GenerateULID(),
@@ -77,12 +74,15 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 			ShipmentDate:   time.Now(),
 		}
 
-		if err := tx.Create(&shipment).Error; err != nil {
+		log.Printf("Before saving shipment: %+v", shipment)
+
+		if err := tx.Save(&shipment).Error; err != nil {
 			log.Println("Error creating shipment:", err)
 			return err
 		}
 
-		// Create ShipmentItems and Requests
+		log.Printf("After saving shipment: %+v", shipment)
+
 		for _, item := range req.Items {
 			quantity, err := item.Quantity.Int64()
 			if err != nil {
@@ -94,17 +94,15 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 				productUnitID = uuid.New().String()
 			}
 
-			// Validate PosInventory
 			var posInventory Inventory
 			if err := posDB.Where("inventory_id = ?", item.PosInventoryID).First(&posInventory).Error; err != nil {
 				log.Println("Error finding PosInventory:", err)
 				return fiber.NewError(fiber.StatusBadRequest, "Invalid PosInventoryID")
 			}
 
-			// Create ShipmentItem
 			shipmentItem := Models.ShipmentItem{
 				ShipmentListID:       uuid.New().String(),
-				ShipmentID:           shipmentID.String(), // Use same ShipmentID
+				ShipmentID:           shipmentID.String(),
 				WarehouseInventoryID: item.WarehouseInventoryID,
 				PosInventoryID:       item.PosInventoryID,
 				ProductUnitID:        productUnitID,
@@ -114,14 +112,15 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 				UpdatedAt:            time.Now(),
 			}
 
+			log.Printf("Creating shipment item: %+v", shipmentItem)
+
 			if err := tx.Create(&shipmentItem).Error; err != nil {
 				log.Println("Error creating shipment item:", err)
 				return err
 			}
 
-			// Create Request
 			request := Request{
-				RequestID:    shipmentID, // Use same ShipmentID
+				RequestID:    shipmentID,
 				FromBranchID: req.FromBranchID,
 				ToBranchID:   req.ToBranchID,
 				ProductID:    posInventory.ProductID.String(),
@@ -129,6 +128,8 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 				Status:       "pending",
 				CreatedAt:    time.Now(),
 			}
+
+			log.Printf("Creating request: %+v", request)
 
 			if err := posDB.Create(&request).Error; err != nil {
 				log.Println("Error creating request in posDB:", err)
@@ -145,34 +146,34 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 }
 
 // UpdateShipment updates the status of a shipment
-// UpdateShipment updates the status of a shipment
 func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
-	id := c.Params("id")
+	id := c.Params("id") // รับ Shipment ID
 	var shipment Models.Shipment
 
-	// Fetch shipment
+	// Fetch Shipment
 	if err := db.Where("shipment_id = ?", id).First(&shipment).Error; err != nil {
 		log.Println("Error finding shipment:", err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Shipment not found"})
 	}
 
 	type ShipmentRequest struct {
-		Status string `json:"status"`
+		Status string `json:"status"` // รับสถานะใหม่
 	}
 
 	var req ShipmentRequest
 	if err := c.BodyParser(&req); err != nil {
-		log.Println("Error parsing shipment update request:", err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format", "details": err.Error()})
+		log.Println("Error parsing request:", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON"})
 	}
 
+	// Validate Status
 	allowedStatuses := map[string]bool{"Pending": true, "Approved": true, "Rejected": true}
 	if !allowedStatuses[req.Status] {
 		log.Println("Invalid status provided:", req.Status)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid status"})
 	}
 
-	// Handle "Approved" status
+	// เมื่อสถานะถูกเปลี่ยนเป็น Approved
 	if req.Status == "Approved" {
 		var shipmentItems []Models.ShipmentItem
 		if err := db.Where("shipment_id = ?", id).Find(&shipmentItems).Error; err != nil {
@@ -188,24 +189,35 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		// Start transaction for inventory updates
 		if err := db.Transaction(func(tx *gorm.DB) error {
 			for _, item := range shipmentItems {
+				// Debug การอัปเดต Inventory
 				log.Printf("Processing item: %+v\n", item)
 
-				// Decrease quantity from Warehouse Inventory
+				// Fetch Inventory ก่อนการอัปเดต
+				var inventory Inventory
+				if err := tx.Where("inventory_id = ?", item.WarehouseInventoryID).First(&inventory).Error; err != nil {
+					log.Printf("Error finding inventory for ID %s: %v\n", item.WarehouseInventoryID, err)
+					return fmt.Errorf("failed to find inventory for item: %s", item.WarehouseInventoryID)
+				}
+
+				log.Printf("Before update - Inventory ID: %s, Current Quantity: %d, Required Quantity: %d",
+					item.WarehouseInventoryID, inventory.Quantity, item.Quantity)
+
+				// ลดสินค้าใน Inventory
 				if err := tx.Model(&Inventory{}).
 					Where("inventory_id = ?", item.WarehouseInventoryID).
 					Where("quantity >= ?", item.Quantity).
 					Update("quantity", gorm.Expr("quantity - ?", item.Quantity)).Error; err != nil {
-					log.Printf("Failed to update warehouse inventory: %v\n", err)
-					return fmt.Errorf("failed to update Warehouse inventory for item: %s", item.WarehouseInventoryID)
+					log.Printf("Failed to decrease Warehouse Inventory for ID %s: %v", item.WarehouseInventoryID, err)
+					return fmt.Errorf("failed to update Warehouse Inventory for item: %s", item.WarehouseInventoryID)
 				}
 
-				// Increase quantity in POS Inventory
-				if err := posDB.Model(&Inventory{}).
-					Where("inventory_id = ?", item.PosInventoryID).
-					Update("quantity", gorm.Expr("quantity + ?", item.Quantity)).Error; err != nil {
-					log.Printf("Failed to update POS inventory: %v\n", err)
-					return fmt.Errorf("failed to update POS inventory for item: %s", item.PosInventoryID)
+				// ตรวจสอบ Inventory หลังจากการอัปเดต
+				if err := tx.Where("inventory_id = ?", item.WarehouseInventoryID).First(&inventory).Error; err != nil {
+					log.Printf("Error fetching inventory after update for ID %s: %v", item.WarehouseInventoryID, err)
+					return fmt.Errorf("failed to fetch inventory after update for WarehouseInventoryID %s", item.WarehouseInventoryID)
 				}
+
+				log.Printf("After update - Inventory ID: %s, New Quantity: %d", item.WarehouseInventoryID, inventory.Quantity)
 			}
 			return nil
 		}); err != nil {
@@ -214,7 +226,7 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		}
 	}
 
-	// Update shipment status
+	// อัปเดตสถานะของ Shipment
 	shipment.Status = req.Status
 	shipment.UpdatedAt = time.Now()
 	if err := db.Save(&shipment).Error; err != nil {
@@ -321,62 +333,163 @@ func UpdateRequestStatus(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	})
 }
 
+func AutoUpdateShipments(db *gorm.DB) error {
+	var shipments []Models.Shipment
+
+	log.Printf("Fetching shipments with status 'Approved'...")
+	// ดึงข้อมูล Shipments ที่สถานะ Approved
+	if err := db.Where("status = ?", "Approved").Find(&shipments).Error; err != nil {
+		log.Println("Error fetching approved shipments for auto-update:", err)
+		return err
+	}
+	log.Printf("Found %d shipments with status 'Approved'", len(shipments))
+
+	for _, shipment := range shipments {
+		log.Printf("Processing shipment ID: %s", shipment.ShipmentID)
+
+		// ดึง ShipmentItems ที่เกี่ยวข้อง
+		var shipmentItems []Models.ShipmentItem
+		if err := db.Where("shipment_id = ?", shipment.ShipmentID).Find(&shipmentItems).Error; err != nil {
+			log.Printf("Error fetching shipment items for shipment ID %s: %v", shipment.ShipmentID, err)
+			continue
+		}
+		log.Printf("Found %d shipment items for shipment ID: %s", len(shipmentItems), shipment.ShipmentID)
+
+		// อัปเดต Inventory
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			for _, item := range shipmentItems {
+				log.Printf("Processing shipment item: %+v", item)
+
+				// ลดจำนวนสินค้าใน Warehouse Inventory
+				if err := tx.Debug().Model(&Inventory{}).
+					Where("inventory_id = ?", item.WarehouseInventoryID).
+					Where("quantity >= ?", item.Quantity). // ตรวจสอบว่ามีสินค้าเพียงพอ
+					Update("quantity", gorm.Expr("quantity - ?", item.Quantity)).Error; err != nil {
+					log.Printf("Failed to update inventory for WarehouseInventoryID %s: %v", item.WarehouseInventoryID, err)
+					return fmt.Errorf("not enough inventory for WarehouseInventoryID %s", item.WarehouseInventoryID)
+				}
+
+				log.Printf("Inventory updated for WarehouseInventoryID: %s, Quantity Decreased: %d", item.WarehouseInventoryID, item.Quantity)
+			}
+
+			// อัปเดตสถานะ Shipment เป็น "Completed"
+			shipment.Status = "Completed"
+			shipment.UpdatedAt = time.Now()
+			if err := tx.Save(&shipment).Error; err != nil {
+				log.Printf("Failed to update shipment ID %s: %v", shipment.ShipmentID, err)
+				return err
+			}
+
+			log.Printf("Shipment ID %s updated to 'Completed'", shipment.ShipmentID)
+			return nil
+		}); err != nil {
+			log.Printf("Error processing shipment ID %s: %v", shipment.ShipmentID, err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+var notFoundRequests = make(map[uuid.UUID]bool)
+
 func SyncRequestStatusWithWarehouse(db *gorm.DB, posDB *gorm.DB) error {
 	var requests []Request
 
-	// ดึงข้อมูล Requests ที่เปลี่ยนสถานะใน POS
+	// ดึงข้อมูล Requests ที่มีสถานะเปลี่ยนแปลง (complete หรือ reject)
 	if err := posDB.Where("status IN ?", []string{"complete", "reject"}).Find(&requests).Error; err != nil {
 		log.Println("Error fetching requests from POS:", err)
 		return err
 	}
 
 	for _, request := range requests {
+		// ข้าม RequestID ที่เคยหาไม่เจอในรอบก่อนหน้า
+		if notFoundRequests[request.RequestID] {
+			continue // ไม่แสดง Log ใด ๆ สำหรับรายการที่ไม่พบ
+		}
+
 		var shipment Models.Shipment
 
-		// ค้นหา shipment ใน Warehouse
+		// ค้นหา Shipment ที่ตรงกับ RequestID
 		if err := db.Where("shipment_id = ?", request.RequestID).First(&shipment).Error; err != nil {
-			log.Printf("Shipment not found for Request ID %s: %v\n", request.RequestID, err)
+			// เก็บ RequestID ที่หาไม่เจอเข้าไปในแคช
+			notFoundRequests[request.RequestID] = true
 			continue
 		}
 
-		// เริ่มอัปเดตสถานะ
+		// ดำเนินการอัปเดตตามปกติ
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			if request.Status == "complete" {
-				// อัปเดตสถานะ Shipment
+			switch request.Status {
+			case "complete":
 				shipment.Status = "Approved"
 				if err := tx.Save(&shipment).Error; err != nil {
 					return fmt.Errorf("failed to update shipment status: %v", err)
 				}
 
-				// อัปเดต Inventory
+				// อัปเดต Inventory (ลดจากต้นทาง เพิ่มในปลายทาง)
 				if err := tx.Model(&Inventory{}).
 					Where("branch_id = ? AND product_id = ?", request.FromBranchID, request.ProductID).
 					Update("quantity", gorm.Expr("quantity - ?", request.Quantity)).Error; err != nil {
-					return fmt.Errorf("failed to update warehouse inventory: %v", err)
+					return fmt.Errorf("failed to update source inventory: %v", err)
 				}
 
 				if err := tx.Model(&Inventory{}).
 					Where("branch_id = ? AND product_id = ?", request.ToBranchID, request.ProductID).
 					Update("quantity", gorm.Expr("quantity + ?", request.Quantity)).Error; err != nil {
-					return fmt.Errorf("failed to update warehouse inventory: %v", err)
+					return fmt.Errorf("failed to update destination inventory: %v", err)
 				}
-			} else if request.Status == "reject" {
-				// อัปเดตสถานะ Shipment
+
+			case "reject":
 				shipment.Status = "Rejected"
 				if err := tx.Save(&shipment).Error; err != nil {
 					return fmt.Errorf("failed to update shipment status: %v", err)
 				}
 			}
+
+			// อัปเดตสถานะใน POS Database ว่าได้ซิงค์แล้ว
+			request.Status = fmt.Sprintf("%s_synced", request.Status) // เช่น complete_synced หรือ reject_synced
+			if err := posDB.Save(&request).Error; err != nil {
+				return fmt.Errorf("failed to update request status in POS: %v", err)
+			}
+
 			return nil
 		}); err != nil {
 			log.Printf("Error syncing request %s with warehouse: %v\n", request.RequestID, err)
 			continue
 		}
 
-		log.Printf("Request %s synced successfully with Warehouse\n", request.RequestID)
+		// ลบ RequestID ออกจากแคช หากดำเนินการสำเร็จ
+		delete(notFoundRequests, request.RequestID)
 	}
 
 	return nil
+}
+
+func StartSyncScheduler(db *gorm.DB, posDB *gorm.DB) {
+	scheduler := gocron.NewScheduler(time.UTC)
+
+	// ซิงค์สถานะระหว่าง POS และ Warehouse ทุก 10 วินาที
+	scheduler.Every(10).Seconds().Do(func() {
+		log.Println("Starting request sync task...")
+		if err := SyncRequestStatusWithWarehouse(db, posDB); err != nil {
+			log.Printf("Error syncing requests: %v\n", err)
+		} else {
+			log.Println("Request sync task completed successfully.")
+		}
+	})
+
+	// ลดจำนวนสินค้าใน Inventory ทุก 10 นาที สำหรับ Shipments ที่ Approved
+	scheduler.Every(12).Seconds().Do(func() {
+		log.Println("Starting shipment auto-update task...")
+		if err := AutoUpdateShipments(db); err != nil {
+			log.Printf("Error updating shipments: %v\n", err)
+		} else {
+			log.Println("Shipment auto-update task completed successfully.")
+		}
+	})
+
+	// เริ่ม Scheduler
+	scheduler.StartAsync()
 }
 
 func LookShipments(db *gorm.DB, c *fiber.Ctx) error {
