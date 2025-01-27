@@ -446,8 +446,6 @@ func SyncRequestStatusWithWarehouse(db *gorm.DB, posDB *gorm.DB) error {
 				}
 			}
 
-			// อัปเดตสถานะใน POS Database ว่าได้ซิงค์แล้ว
-			request.Status = fmt.Sprintf("%s_synced", request.Status) // เช่น complete_synced หรือ reject_synced
 			if err := posDB.Save(&request).Error; err != nil {
 				return fmt.Errorf("failed to update request status in POS: %v", err)
 			}
