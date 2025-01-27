@@ -72,6 +72,7 @@ func main() {
 	})
 
 	db.Migrator().DropTable(
+		&Models.Employees{},
 		&Models.ShipmentItem{},
 		&Models.Shipment{},
 	// &Models.OrderItem{},
@@ -92,7 +93,7 @@ func main() {
 		// &Models.ProductUnit{},
 		// &Models.Order{},
 		// &Models.OrderItem{},
-		// &Models.Employees{},
+		&Models.Employees{},
 		&Models.Shipment{},
 		&Models.ShipmentItem{},
 	); err != nil {

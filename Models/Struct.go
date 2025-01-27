@@ -9,40 +9,31 @@ import (
 
 // Employees model
 type Employees struct {
-	EmployeesID string    `gorm:"type:uuid;primaryKey" json:"employees_id"`
+	EmployeesID uuid.UUID `gorm:"type:uuid;primaryKey" json:"employees_id"`
 	Username    string    `json:"username"`
 	Password    string    `json:"password"`
 	Name        string    `json:"name"`
 	Role        string    `json:"role"`
-	BranchID    string    `gorm:"column:branch_id;foreignKey:BranchID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+	BranchID    uuid.UUID `gorm:"type:uuid;column:branch_id" json:"branch_id"`
+	Branch      Branches  `gorm:"foreignKey:BranchID;references:BranchID" json:"branch,omitempty"` // กำหนด Foreign Key
 	Salary      float64   `json:"salary"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (Employees) TableName() string {
-	return "Employees"
-}
-
-func (s *Employees) BeforeCreate(tx *gorm.DB) (err error) {
-	s.EmployeesID = uuid.New().String()
-	return
+	return `"Employees"`
 }
 
 // Branch model
 type Branches struct {
-	BranchID  string    `gorm:"type:uuid;primaryKey" json:"branch_id"`
+	BranchID  uuid.UUID `gorm:"type:uuid;primaryKey" json:"branch_id"`
 	BName     string    `json:"b_name"`
 	Location  string    `json:"location"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func (Branches) TableName() string {
-	return "Branches"
-}
-
-func (b *Branches) BeforeCreate(tx *gorm.DB) (err error) {
-	b.BranchID = uuid.New().String()
-	return
+	return `"Branches"`
 }
 
 // Product model

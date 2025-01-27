@@ -115,7 +115,7 @@ func AddShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 				ToBranchID:   req.ToBranchID,
 				ProductID:    posInventory.ProductID.String(),
 				Quantity:     int(quantity),
-				Status:       "pending",
+				Status:       "Pending",
 				CreatedAt:    time.Now(),
 			}
 
