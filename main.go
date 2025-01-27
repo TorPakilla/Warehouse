@@ -8,7 +8,6 @@ import (
 
 	"Api/Authentication"
 	"Api/Func"
-	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -72,9 +71,9 @@ func main() {
 	})
 
 	db.Migrator().DropTable(
-		&Models.Employees{},
-		&Models.ShipmentItem{},
-		&Models.Shipment{},
+	// &Models.Employees{},
+	// &Models.ShipmentItem{},
+	// &Models.Shipment{},
 	// &Models.OrderItem{},
 	// &Models.Order{},
 	// &Models.ProductUnit{},
@@ -86,16 +85,16 @@ func main() {
 
 	// สร้างตารางใหม่ตามลำดับ
 	if err := db.AutoMigrate(
-		// &Models.Branches{},
-		// &Models.Product{},
-		// &Models.Supplier{},
-		// &Models.Inventory{},
-		// &Models.ProductUnit{},
-		// &Models.Order{},
-		// &Models.OrderItem{},
-		&Models.Employees{},
-		&Models.Shipment{},
-		&Models.ShipmentItem{},
+	// &Models.Branches{},
+	// &Models.Product{},
+	// &Models.Supplier{},
+	// &Models.Inventory{},
+	// &Models.ProductUnit{},
+	// &Models.Order{},
+	// &Models.OrderItem{},
+	// &Models.Employees{},
+	// &Models.Shipment{},
+	// &Models.ShipmentItem{},
 	); err != nil {
 		log.Fatalf("Failed to migrate: %v", err)
 	}
