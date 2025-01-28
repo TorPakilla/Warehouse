@@ -2,6 +2,7 @@ package Func
 
 import (
 	"Api/Models"
+	"encoding/json"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -174,9 +175,76 @@ func GetBranchesWithInventory(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 	})
 }
 
+func GetInventorySummary(db *gorm.DB, c *fiber.Ctx) error {
+	var inventoryData []struct {
+		ProductID   string `json:"product_id"`
+		ProductName string `json:"product_name"`
+		Description string `json:"description"`
+		Quantity    int    `json:"quantity"`
+	}
+
+	// Query รวมข้อมูล
+	err := db.Raw(`
+		SELECT p.product_id, p.product_name, p.description, SUM(i.quantity) as quantity
+		FROM public."Inventory" i
+		JOIN public."Product" p ON i.product_id = p.product_id
+		GROUP BY p.product_id, p.product_name, p.description
+	`).Scan(&inventoryData).Error
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch inventory summary",
+		})
+	}
+
+	return c.JSON(fiber.Map{"inventory_summary": inventoryData})
+}
+
+type InventoryCategory struct {
+	Category      string          `json:"category"`
+	TotalQuantity int             `json:"total_quantity"`
+	Details       json.RawMessage `json:"details"` // ใช้ json.RawMessage เพื่อเก็บ JSON ดิบ
+}
+
+func GetInventoryByCategory(db *gorm.DB, c *fiber.Ctx) error {
+	var categories []struct {
+		Category      string          `json:"category"`
+		TotalQuantity int             `json:"total_quantity"`
+		Details       json.RawMessage `json:"details"`
+	}
+
+	err := db.Raw(`
+    SELECT 
+        p.description AS category,
+        COALESCE(SUM(i.quantity), 0) AS total_quantity,
+        JSON_AGG(
+            JSON_BUILD_OBJECT('product_name', p.product_name, 'quantity', i.quantity)
+        ) AS details
+    FROM public."Inventory" i
+    JOIN public."Product" p ON i.product_id::UUID = p.product_id
+    GROUP BY p.description
+`).Scan(&categories).Error
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch inventory by category: " + err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{"categories": categories})
+}
+
 func InventoryRoutes(app *fiber.App, db *gorm.DB, posDB *gorm.DB) {
 	app.Get("/BranchesWithInventory", func(c *fiber.Ctx) error {
 		return GetBranchesWithInventory(db, posDB, c)
+	})
+
+	app.Get("/inventory-summary", func(c *fiber.Ctx) error {
+		return GetInventorySummary(db, c)
+	})
+
+	app.Get("/inventory-by-category", func(c *fiber.Ctx) error {
+		return GetInventoryByCategory(db, c)
 	})
 
 	app.Get("/InventoriesByBranch", func(c *fiber.Ctx) error {

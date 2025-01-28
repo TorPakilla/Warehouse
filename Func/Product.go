@@ -7,8 +7,21 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+type ProductsPos struct {
+	ProductID   uuid.UUID `json:"product_id"`
+	ProductName string    `json:"product_name"`
+	Description string    `json:"description"`
+	Price       float64   `json:"price"`
+	UnitsPerBox int       `json:"units_per_box"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	ImageUrl    string    `json:"image_url"` // เปลี่ยนชื่อฟิลด์ให้ตรงกับ JSON
+	CategoryID  uuid.UUID `json:"category_id"`
+}
 
 // สร้าง Product พร้อมกับ Inventory และ ProductUnit
 func AddProductWithInventory(db *gorm.DB, c *fiber.Ctx) error {
@@ -171,6 +184,14 @@ func LookProducts(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"products": products})
 }
 
+func LookProductsPos(posDB *gorm.DB, c *fiber.Ctx) error {
+	var products []ProductsPos
+	if err := posDB.Table("Products").Find(&products).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
+	}
+	return c.JSON(fiber.Map{"products": products})
+}
+
 // ดึงข้อมูล ProductUnit ทั้งหมด
 func LookProductUnit(db *gorm.DB, c *fiber.Ctx) error {
 	var products []Models.ProductUnit
@@ -195,12 +216,16 @@ func DeleteProduct(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Product deleted successfully"})
 }
 
-func ProductRouter(app fiber.Router, db *gorm.DB) {
+func ProductRouter(app fiber.Router, db *gorm.DB, posDB *gorm.DB) {
 	app.Post("/Product", func(c *fiber.Ctx) error {
 		return AddProductWithInventory(db, c)
 	})
 	app.Get("/Product", func(c *fiber.Ctx) error {
 		return LookProducts(db, c)
+	})
+
+	app.Get("/Products", func(c *fiber.Ctx) error {
+		return LookProductsPos(posDB, c)
 	})
 
 	app.Get("/ProductUnit", func(c *fiber.Ctx) error {

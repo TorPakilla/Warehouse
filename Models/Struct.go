@@ -57,7 +57,7 @@ func (s *Product) BeforeCreate(tx *gorm.DB) (err error) {
 // ProductUnit model
 type ProductUnit struct {
 	ProductUnitID   string    `gorm:"primaryKey;column:product_unit_id" json:"product_unit_id"`
-	ProductID       string    `gorm:"column:product_id" json:"product_id"`
+	ProductID       string    `gorm:"column:product_id;constraint:OnDelete:CASCADE" json:"product_id"`
 	Type            string    `gorm:"column:type" json:"type"`
 	InitialQuantity int       `gorm:"column:initial_quantity" json:"initial_quantity"`
 	ConversRate     int       `gorm:"column:convers_rate" json:"convers_rate"`
@@ -77,7 +77,7 @@ func (p *ProductUnit) BeforeCreate(tx *gorm.DB) (err error) {
 // Inventory model
 type Inventory struct {
 	InventoryID string    `gorm:"primaryKey;column:inventory_id" json:"inventory_id"`
-	ProductID   string    `gorm:"column:product_id" json:"product_id"`
+	ProductID   string    `gorm:"column:product_id;constraint:OnDelete:CASCADE" json:"product_id"`
 	BranchID    string    `gorm:"column:branch_id" json:"branch_id"`
 	Quantity    int       `gorm:"column:quantity" json:"quantity"`
 	Price       float64   `gorm:"column:price" json:"price"`
@@ -123,7 +123,7 @@ type Order struct {
 
 	// Relationships
 	Employees  *Employees  `gorm:"foreignKey:EmployeesID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"employees"`
-	OrderItems []OrderItem `gorm:"foreignKey:OrderID" json:"order_items"`
+	OrderItems []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"order_items"`
 }
 
 func (Order) TableName() string {
@@ -138,7 +138,7 @@ func (s *Order) BeforeCreate(tx *gorm.DB) (err error) {
 
 type OrderItem struct {
 	OrderItemID string    `gorm:"type:uuid;primaryKey" json:"order_item_id"`
-	OrderID     string    `gorm:"type:uuid;not null" json:"order_id"`
+	OrderID     string    `gorm:"type:uuid;not null;constraint:OnDelete:CASCADE" json:"order_id"`
 	ProductID   string    `gorm:"type:uuid;not null" json:"product_id"`
 	Quantity    int       `json:"quantity"`
 	ConversRate float64   `json:"convers_rate"`
@@ -166,6 +166,8 @@ type Shipment struct {
 	ShipmentDate   time.Time `json:"shipment_date"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+
+	ShipmentItems []ShipmentItem `gorm:"foreignKey:ShipmentID;constraint:OnDelete:CASCADE" json:"shipment_items"`
 }
 
 func (Shipment) TableName() string {
@@ -180,7 +182,7 @@ func (s *Shipment) BeforeCreate(tx *gorm.DB) (err error) {
 // ShipmentItem model
 type ShipmentItem struct {
 	ShipmentListID       string    `gorm:"primaryKey;type:uuid" json:"shipment_list_id"`
-	ShipmentID           string    `json:"shipment_id"`
+	ShipmentID           string    `gorm:"column:shipment_id;constraint:OnDelete:CASCADE" json:"shipment_id"`
 	WarehouseInventoryID string    `json:"warehouse_inventory_id"`
 	PosInventoryID       string    `json:"pos_inventory_id"`
 	ProductUnitID        string    `json:"product_unit_id"`

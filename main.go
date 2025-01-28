@@ -114,7 +114,7 @@ func main() {
 	// API Routes
 	Func.EmployeesRoutes(app, db)
 	Func.BranchRoutes(app, db, posDB)
-	Func.ProductRouter(app, db)
+	Func.ProductRouter(app, db, posDB)
 	Func.InventoryRoutes(app, db, posDB)
 	Func.SupplierRoutes(app, db)
 	Func.OrderRoutes(app, db)

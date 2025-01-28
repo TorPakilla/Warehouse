@@ -205,6 +205,12 @@ func UpdateShipment(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 		}
 	}
 
+	if shipment.Status == "Completed" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Cannot update a completed shipment",
+		})
+	}
+
 	shipment.Status = req.Status
 	shipment.UpdatedAt = time.Now()
 	if err := db.Save(&shipment).Error; err != nil {
@@ -228,12 +234,16 @@ func AutoUpdateShipments(db *gorm.DB) error {
 	}
 
 	for _, shipment := range shipments {
+		if shipment.Status == "Completed" {
+			continue
+		}
 		var shipmentItems []Models.ShipmentItem
 		if err := db.Where("shipment_id = ?", shipment.ShipmentID).Find(&shipmentItems).Error; err != nil {
 			continue
 		}
 
 		if err := db.Transaction(func(tx *gorm.DB) error {
+
 			for _, item := range shipmentItems {
 				if err := tx.Model(&Inventory{}).
 					Where("inventory_id = ?", item.WarehouseInventoryID).
@@ -285,6 +295,9 @@ func SyncRequestStatusWithWarehouse(db *gorm.DB, posDB *gorm.DB) error {
 
 		// ดำเนินการอัปเดตตามปกติ
 		if err := db.Transaction(func(tx *gorm.DB) error {
+			if shipment.Status == "Completed" {
+				return nil
+			}
 			switch request.Status {
 			case "complete":
 				shipment.Status = "Approved"
@@ -311,6 +324,7 @@ func SyncRequestStatusWithWarehouse(db *gorm.DB, posDB *gorm.DB) error {
 				}
 			}
 
+			request.Status = "Done"
 			if err := posDB.Save(&request).Error; err != nil {
 				return fmt.Errorf("failed to update request status in POS: %v", err)
 			}
@@ -336,7 +350,7 @@ func StartSyncScheduler(db *gorm.DB, posDB *gorm.DB) {
 		_ = SyncRequestStatusWithWarehouse(db, posDB)
 	})
 
-	scheduler.Every(10).Seconds().Do(func() {
+	scheduler.Every(13).Seconds().Do(func() {
 		_ = AutoUpdateShipments(db)
 	})
 
