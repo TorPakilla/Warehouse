@@ -15,7 +15,6 @@ type Employees struct {
 	Name        string    `json:"name"`
 	Role        string    `json:"role"`
 	BranchID    uuid.UUID `gorm:"type:uuid;column:branch_id" json:"branch_id"`
-	Branch      Branches  `gorm:"foreignKey:BranchID;references:BranchID" json:"branch,omitempty"` // กำหนด Foreign Key
 	Salary      float64   `json:"salary"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -36,13 +35,20 @@ func (Branches) TableName() string {
 	return `"Branches"`
 }
 
+func (s *Branches) BeforeCreate(tx *gorm.DB) (err error) {
+	s.BranchID = uuid.New()
+	return
+}
+
 // Product model
 type Product struct {
-	ProductID   string    `gorm:"type:uuid;primaryKey" json:"product_id"`
-	ProductName string    `json:"product_name"`
-	Description string    `json:"description"`
-	Image       []byte    `json:"image"`
-	CreatedAt   time.Time `json:"created_at"`
+	ProductID   string        `gorm:"type:uuid;primaryKey" json:"product_id"`
+	ProductName string        `json:"product_name"`
+	Description string        `json:"description"`
+	Image       []byte        `json:"image"`
+	CreatedAt   time.Time     `json:"created_at"`
+	Inventory   []Inventory   `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"inventory"`
+	ProductUnit []ProductUnit `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"product_unit"`
 }
 
 func (Product) TableName() string {
@@ -122,8 +128,7 @@ type Order struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 
 	// Relationships
-	Employees  *Employees  `gorm:"foreignKey:EmployeesID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"employees"`
-	OrderItems []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"order_items"`
+	OrderItems []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"order_items"` // OnDelete:CASCADE
 }
 
 func (Order) TableName() string {
@@ -138,7 +143,7 @@ func (s *Order) BeforeCreate(tx *gorm.DB) (err error) {
 
 type OrderItem struct {
 	OrderItemID string    `gorm:"type:uuid;primaryKey" json:"order_item_id"`
-	OrderID     string    `gorm:"type:uuid;not null;constraint:OnDelete:CASCADE" json:"order_id"`
+	OrderID     string    `gorm:"type:uuid;not null;constraint:OnDelete:CASCADE" json:"order_id"` // OnDelete:CASCADE
 	ProductID   string    `gorm:"type:uuid;not null" json:"product_id"`
 	Quantity    int       `json:"quantity"`
 	ConversRate float64   `json:"convers_rate"`
@@ -150,7 +155,6 @@ func (OrderItem) TableName() string {
 	return "OrderItem"
 }
 
-// BeforeCreate sets a new UUID before creating the record
 func (s *OrderItem) BeforeCreate(tx *gorm.DB) (err error) {
 	s.OrderItemID = uuid.New().String()
 	return
@@ -167,6 +171,7 @@ type Shipment struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 
+	// Relationships
 	ShipmentItems []ShipmentItem `gorm:"foreignKey:ShipmentID;constraint:OnDelete:CASCADE" json:"shipment_items"`
 }
 
