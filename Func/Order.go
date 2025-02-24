@@ -50,70 +50,78 @@ func AddOrder(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	var supplier Models.Supplier
-	if err := db.Where("supplier_id = ?", req.SupplierID).First(&supplier).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Supplier not found"})
+	// ✅ ตรวจสอบว่ามีสินค้าใน Order หรือไม่
+	if len(req.OrderItems) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "At least one product is required in the order"})
 	}
 
-	if req.EmployeesID != nil {
-		var employee Models.Employees
-		if err := db.Where("employees_id = ?", *req.EmployeesID).First(&employee).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Employee not found"})
-		}
-	}
-
-	order := Models.Order{
-		OrderID:     uuid.New().String(),
-		OrderNumber: GenerateULID(),
-		Status:      "Pending",
-		SupplierID:  uuid.MustParse(req.SupplierID),
-		EmployeesID: parseUUIDPointer(req.EmployeesID),
-		CreatedAt:   time.Now(),
-	}
-
-	if err := db.Create(&order).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order"})
-	}
-
-	for _, item := range req.OrderItems {
-		var product Models.Product
-		if err := db.Where("product_id = ?", item.ProductID).First(&product).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found: " + item.ProductID})
-		}
-
-		var productUnit Models.ProductUnit
-		if err := db.Where("product_id = ?", item.ProductID).First(&productUnit).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ProductUnit not found for product: " + item.ProductID})
-		}
-
-		if productUnit.ConversRate <= 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid convers_rate for product: " + item.ProductID})
-		}
-
-		finalQuantity := item.Quantity * productUnit.ConversRate
-		if finalQuantity <= 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Final quantity cannot be zero or negative for product: " + item.ProductID})
-		}
-
-		orderItem := Models.OrderItem{
-			OrderItemID: uuid.New().String(),
-			OrderID:     order.OrderID,
-			ProductID:   item.ProductID,
-			Quantity:    finalQuantity,
-			ConversRate: float64(productUnit.ConversRate),
+	// ✅ ใช้ Transaction เพื่อให้แน่ใจว่า Order และ OrderItems ถูกบันทึกพร้อมกัน
+	err := db.Transaction(func(tx *gorm.DB) error {
+		order := Models.Order{
+			OrderID:     uuid.New().String(),
+			OrderNumber: GenerateULID(),
+			Status:      "Pending",
+			SupplierID:  uuid.MustParse(req.SupplierID),
+			EmployeesID: parseUUIDPointer(req.EmployeesID),
 			CreatedAt:   time.Now(),
 		}
 
-		if err := db.Create(&orderItem).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order item"})
+		// ✅ บันทึก Order
+		if err := tx.Create(&order).Error; err != nil {
+			return err
 		}
+
+		// ✅ สร้าง OrderItems
+		var orderItems []Models.OrderItem
+		for _, item := range req.OrderItems {
+			if item.ProductID == "" {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ProductID is required"})
+			}
+
+			var product Models.Product
+			if err := db.Where("product_id = ?", item.ProductID).First(&product).Error; err != nil {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found: " + item.ProductID})
+			}
+
+			var productUnit Models.ProductUnit
+			if err := db.Where("product_id = ?", item.ProductID).First(&productUnit).Error; err != nil {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ProductUnit not found for product: " + item.ProductID})
+			}
+
+			// ✅ แปลงจำนวนตามหน่วย
+			finalQuantity := item.Quantity * productUnit.ConversRate
+			if finalQuantity <= 0 {
+				return fmt.Errorf("Invalid final quantity for product: %s", item.ProductID)
+			}
+
+			orderItems = append(orderItems, Models.OrderItem{
+				OrderItemID: uuid.New().String(),
+				OrderID:     order.OrderID,
+				ProductID:   item.ProductID,
+				Quantity:    finalQuantity,
+				ConversRate: float64(productUnit.ConversRate),
+				CreatedAt:   time.Now(),
+			})
+		}
+
+		// ✅ บันทึก OrderItems
+		if err := tx.Create(&orderItems).Error; err != nil {
+			return err
+		}
+
+		// ✅ อัปเดต Total Amount
+		if err := UpdateTotalAmount(tx, order.OrderID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create order: " + err.Error()})
 	}
 
-	if err := UpdateTotalAmount(db, order.OrderID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order total amount"})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Order created successfully", "data": order})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Order created successfully"})
 }
 
 // อัปเดตค่า TotalAmount ของ Order

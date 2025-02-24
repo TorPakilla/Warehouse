@@ -45,7 +45,13 @@ func Login(c *fiber.Ctx) error {
 
 	// ตรวจสอบรหัสผ่าน
 	if err := bcrypt.CompareHashAndPassword([]byte(employee.Password), []byte(data.Password)); err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Invalid Password"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": "Invalid Password",
+			"debug": fiber.Map{
+				"stored_hash":      employee.Password,
+				"entered_password": data.Password,
+			},
+		})
 	}
 
 	// สร้าง JWT Token
@@ -63,8 +69,20 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Internal Server Error"})
 	}
 
-	// ส่ง JWT Token กลับ
-	return c.JSON(fiber.Map{"token": tokenString})
+	return c.JSON(fiber.Map{
+		"token": tokenString,
+		"user": fiber.Map{
+			"employees_id": employee.EmployeesID,
+			"username":     employee.Username,
+			"name":         employee.Name,
+			"role":         employee.Role,
+			"branch": fiber.Map{
+				"branch_id": employee.BranchID,
+				"b_name":    employee.Branch.BName,
+			},
+		},
+	})
+
 }
 
 // Middleware สำหรับตรวจสอบ Token

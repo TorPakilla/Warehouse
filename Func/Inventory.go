@@ -3,6 +3,8 @@ package Func
 import (
 	"Api/Models"
 	"encoding/json"
+	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -146,11 +148,11 @@ func GetBranchesWithInventory(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
 
 	// ดึงข้อมูลจาก Warehouse
 	warehouseErr := db.Raw(`
-		SELECT DISTINCT i.branch_id AS branch_id, b.b_name AS branch_name
-		FROM public."Inventory" i
-		JOIN public."Branches" b ON i.branch_id = b.branch_id
-		WHERE i.quantity > 0
-	`).Scan(&warehouseBranches).Error
+    SELECT DISTINCT i.branch_id AS branch_id, b.b_name AS branch_name
+    FROM public."Inventory" i
+    JOIN public."Branches" b ON i.branch_id::UUID = b.branch_id
+    WHERE i.quantity > 0
+`).Scan(&warehouseBranches).Error
 
 	// ดึงข้อมูลจาก POS
 	posErr := posDB.Raw(`
@@ -234,9 +236,153 @@ func GetInventoryByCategory(db *gorm.DB, c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"categories": categories})
 }
 
+var lowStockCache []struct {
+	ProductID   string    `json:"product_id"`
+	ProductName string    `json:"product_name"`
+	Category    string    `json:"category"`
+	Quantity    int       `json:"quantity"`
+	BranchName  string    `json:"branch_name"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+var lastCacheTime time.Time
+
+func GetPosLowStock(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
+	if time.Since(lastCacheTime) < 30*time.Second {
+		log.Println("🔄 Using cached POS Low Stock data")
+		return c.JSON(fiber.Map{"low_stock_items": lowStockCache})
+	}
+
+	log.Println("Fetching POS Low Stock Items from Database...")
+
+	err := posDB.Raw(`
+        SELECT 
+            p.product_id, 
+            p.product_name, 
+            c.category_name AS category, 
+            i.quantity, 
+            b.b_name AS branch_name,
+			i.updated_at AT TIME ZONE 'UTC' AS updated_at
+        FROM public."Inventory" i
+        JOIN public."Products" p ON i.product_id = p.product_id
+        JOIN public."Category" c ON p.category_id = c.category_id  
+        JOIN public."Branches" b ON i.branch_id = b.branch_id  
+        WHERE i.quantity < 1000
+        ORDER BY i.updated_at DESC 
+    `).Scan(&lowStockCache).Error
+
+	if err != nil {
+		log.Println("❌ Error fetching POS low stock items:", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch POS low stock items: " + err.Error(),
+		})
+	}
+
+	lastCacheTime = time.Now() // ✅ อัปเดต cache time
+	return c.JSON(fiber.Map{"low_stock_items": lowStockCache})
+}
+
+func GetFilteredCategories(db *gorm.DB, posDB *gorm.DB, c *fiber.Ctx) error {
+	fromBranch := c.Query("fromBranch")
+	toBranch := c.Query("toBranch")
+
+	if fromBranch == "" || toBranch == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "fromBranch and toBranch are required"})
+	}
+
+	var categories []string
+
+	// Query ดึงหมวดหมู่สินค้าที่มีอยู่ในทั้ง Warehouse และ POS ที่เลือก
+	query := `
+        SELECT DISTINCT p.description 
+        FROM public."Inventory" i
+        JOIN public."Product" p ON i.product_id = p.product_id
+        WHERE i.branch_id IN (?, ?)
+    `
+
+	err := db.Raw(query, fromBranch, toBranch).Scan(&categories).Error
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"categories": categories})
+}
+
+func GetProductsByCategoryAndBranch(db *gorm.DB, c *fiber.Ctx) error {
+	branchID := c.Query("branchId")
+	category := c.Query("category")
+
+	if branchID == "" || category == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId and category are required"})
+	}
+
+	var products []struct {
+		ProductID   string `json:"product_id"`
+		ProductName string `json:"product_name"`
+	}
+
+	err := db.Raw(`
+        SELECT DISTINCT p.product_id, p.product_name
+        FROM public."Inventory" i
+        JOIN public."Product" p ON i.product_id = p.product_id
+        WHERE i.branch_id = ? AND LOWER(p.description) = LOWER(?)
+    `, branchID, category).Scan(&products).Error
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"products": products})
+}
+
+func GetMatchingProductsInPOS(posDB *gorm.DB, c *fiber.Ctx) error {
+	branchID := c.Query("branchId")
+	productName := c.Query("productName")
+
+	if branchID == "" || productName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId and productName are required"})
+	}
+
+	var products []struct {
+		ProductID   string `json:"product_id"`
+		ProductName string `json:"product_name"`
+		InventoryID string `json:"inventory_id"` // ✅ เพิ่มตรงนี้
+	}
+
+	err := posDB.Raw(`
+		SELECT DISTINCT p.product_id, p.product_name, i.inventory_id
+		FROM public."Inventory" i
+		JOIN public."Products" p ON i.product_id = p.product_id
+		WHERE i.branch_id = ? AND p.product_name ILIKE ?
+	`, branchID, "%"+productName+"%").Scan(&products).Error
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"products": products})
+}
+
 func InventoryRoutes(app *fiber.App, db *gorm.DB, posDB *gorm.DB) {
+
+	app.Get("/GetProductsByCategoryAndBranch", func(c *fiber.Ctx) error {
+		return GetProductsByCategoryAndBranch(db, c)
+	})
+
+	app.Get("/GetMatchingProductsInPOS", func(c *fiber.Ctx) error {
+		return GetMatchingProductsInPOS(posDB, c)
+	})
+
+	app.Get("/GetFilteredCategories", func(c *fiber.Ctx) error {
+		return GetFilteredCategories(db, posDB, c)
+	})
+
 	app.Get("/BranchesWithInventory", func(c *fiber.Ctx) error {
 		return GetBranchesWithInventory(db, posDB, c)
+	})
+
+	app.Get("/GetPosLowStock", func(c *fiber.Ctx) error {
+		return GetPosLowStock(db, posDB, c)
 	})
 
 	app.Get("/inventory-summary", func(c *fiber.Ctx) error {

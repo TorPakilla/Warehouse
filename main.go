@@ -14,13 +14,16 @@ import (
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // connectToDatabase establishes a connection to the database
 func connectToDatabase(host string, port int, user, password, dbname string) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
-	return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	return gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info), // ✅ เพิ่ม Logger
+	})
 }
 
 func main() {
@@ -56,7 +59,6 @@ func main() {
 	log.Println("Connected to POS database!")
 
 	go Func.StartSyncScheduler(db, posDB)
-	// Initialize Fiber app
 	app := fiber.New()
 
 	// Middleware
@@ -70,36 +72,30 @@ func main() {
 		return c.Next()
 	})
 
-	db.Migrator().DropTable(
-	// &Models.Employees{},
-	// &Models.ShipmentItem{},
-	// &Models.Shipment{},
-	// &Models.OrderItem{},
-	// &Models.Order{},
-	// &Models.ProductUnit{},
-	// &Models.Inventory{},
-	// &Models.Supplier{},
-	// &Models.Product{},
-	// &Models.Branches{},
-	)
+	if err != nil {
+		log.Fatal("❌ Failed to migrate Employees:", err)
+	}
+	log.Println("✅ Employees table migrated successfully!")
 
-	// สร้างตารางใหม่ตามลำดับ
-	if err := db.AutoMigrate(
-	// &Models.Branches{},
+	// ✅ Migration สำหรับตารางที่เหลือ
+	log.Println("🚀 Migrating related tables...")
+	err = db.AutoMigrate(
 	// &Models.Product{},
-	// &Models.Supplier{},
 	// &Models.Inventory{},
 	// &Models.ProductUnit{},
+	// &Models.Supplier{},
 	// &Models.Order{},
 	// &Models.OrderItem{},
-	// &Models.Employees{},
 	// &Models.Shipment{},
 	// &Models.ShipmentItem{},
-	); err != nil {
-		log.Fatalf("Failed to migrate: %v", err)
+	// &Models.ProductSupplier{},
+	)
+	if err != nil {
+		log.Fatal("❌ Failed to migrate related tables:", err)
 	}
 
-	// Authentication Routes
+	log.Println("✅ Migration completed successfully!")
+
 	app.Post("/login", Authentication.Login)
 
 	// Protected Routes Example

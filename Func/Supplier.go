@@ -4,15 +4,17 @@ import (
 	"Api/Models"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// เพิ่มข้อมูล Supplier
+// ✅ ฟังก์ชันเพิ่ม Supplier พร้อมบันทึกลง ProductSupplier
 func AddSupplier(db *gorm.DB, c *fiber.Ctx) error {
+	// รับข้อมูลจาก JSON Request
 	type SupplierRequest struct {
 		Name        string  `json:"name"`
 		PricePallet float64 `json:"pricepallet"`
-		ProductID   string  `gorm:"foreignKey:ProductID" json:"productid"`
+		ProductID   string  `json:"productid"`
 	}
 
 	var req SupplierRequest
@@ -20,34 +22,64 @@ func AddSupplier(db *gorm.DB, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
 	}
 
-	body := make(map[string]interface{})
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON format: " + err.Error()})
+	// ✅ ตรวจสอบค่าที่จำเป็นต้องมี
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Supplier name is required"})
+	}
+	if req.PricePallet <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Price pallet must be greater than zero"})
 	}
 
-	allowedFields := map[string]bool{
-		"name":        true,
-		"pricepallet": true,
-		"productid":   true,
-	}
+	// ✅ สร้าง UUID ใหม่ให้ Supplier (ใช้ค่าเดียวกันทุกที่)
+	supplierUUID := uuid.New()
 
-	for key := range body {
-		if !allowedFields[key] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid field: " + key})
+	// ✅ ตรวจสอบ `ProductID` ถ้ามีค่าต้องเป็น UUID ที่ถูกต้อง
+	var productUUID *uuid.UUID
+	if req.ProductID != "" {
+		parsedUUID, err := uuid.Parse(req.ProductID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid product UUID format"})
 		}
+		productUUID = &parsedUUID
 	}
 
+	// ✅ สร้าง Supplier ในฐานข้อมูล
 	supplier := Models.Supplier{
+		SupplierID:  supplierUUID.String(), // ✅ ใช้ UUID ที่เพิ่งสร้าง
 		Name:        req.Name,
 		PricePallet: req.PricePallet,
-		ProductID:   req.ProductID,
+	}
+
+	// ✅ ถ้ามี `ProductID` ให้ใส่ค่าลงไป
+	if productUUID != nil {
+		supplier.ProductID = productUUID.String()
 	}
 
 	if err := db.Create(&supplier).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create supplier: " + err.Error()})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Supplier created successfully", "data": supplier})
+	// ✅ ถ้ามี `ProductID` ให้บันทึกลง `ProductSupplier` (ใช้ `supplierUUID` ที่ถูกต้อง)
+	if productUUID != nil {
+		productSupplier := Models.ProductSupplier{
+			SupplierID: supplierUUID, // ✅ ใช้ UUID ที่สร้างตอนแรก
+			ProductID:  *productUUID, // ✅ UUID ของ Product
+		}
+
+		if err := db.Create(&productSupplier).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to link product with supplier: " + err.Error()})
+		}
+	}
+
+	// ✅ ตอบกลับข้อมูลที่สร้างสำเร็จ
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Supplier created successfully",
+		"data": fiber.Map{
+			"supplier_id": supplierUUID.String(), // ✅ ใช้ค่า supplierUUID ที่ถูกต้อง
+			"name":        supplier.Name,
+			"pricepallet": supplier.PricePallet,
+		},
+	})
 }
 
 // ดูข้อมูล Supplier

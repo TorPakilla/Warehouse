@@ -7,28 +7,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// Employees model
-type Employees struct {
-	EmployeesID uuid.UUID `gorm:"type:uuid;primaryKey" json:"employees_id"`
-	Username    string    `json:"username"`
-	Password    string    `json:"password"`
-	Name        string    `json:"name"`
-	Role        string    `json:"role"`
-	BranchID    uuid.UUID `gorm:"type:uuid;column:branch_id" json:"branch_id"`
-	Salary      float64   `json:"salary"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-func (Employees) TableName() string {
-	return `"Employees"`
-}
-
-// Branch model
+// Branches model (ตารางหลัก)
 type Branches struct {
-	BranchID  uuid.UUID `gorm:"type:uuid;primaryKey" json:"branch_id"`
-	BName     string    `json:"b_name"`
-	Location  string    `json:"location"`
-	CreatedAt time.Time `json:"created_at"`
+	BranchID uuid.UUID `gorm:"type:uuid;primaryKey" json:"branch_id"`
+	BName    string    `json:"b_name"`
+	Location string    `json:"location"`
+
+	// ไม่ต้องมี Foreign Key ไปยัง Employees
+	Employees []Employees `gorm:"foreignKey:BranchID;constraint:OnDelete:CASCADE" json:"employees"`
 }
 
 func (Branches) TableName() string {
@@ -38,6 +24,24 @@ func (Branches) TableName() string {
 func (s *Branches) BeforeCreate(tx *gorm.DB) (err error) {
 	s.BranchID = uuid.New()
 	return
+}
+
+// Employees model (พนักงานอ้างอิง Branches)
+type Employees struct {
+	EmployeesID uuid.UUID `gorm:"type:uuid;primaryKey" json:"employees_id"`
+	Username    string    `json:"username"`
+	Password    string    `json:"password"`
+	Name        string    `json:"name"`
+	Role        string    `json:"role"`
+	Salary      float64   `json:"salary"`
+	CreatedAt   time.Time `json:"created_at"`
+
+	BranchID uuid.UUID `gorm:"type:uuid;not null" json:"branch_id"`
+	Branch   Branches  `gorm:"foreignKey:BranchID;references:BranchID;constraint:OnDelete:CASCADE" json:"branch"`
+}
+
+func (Employees) TableName() string {
+	return `"Employees"`
 }
 
 // Product model
@@ -110,11 +114,6 @@ type Supplier struct {
 
 func (Supplier) TableName() string {
 	return "Supplier"
-}
-
-func (s *Supplier) BeforeCreate(tx *gorm.DB) (err error) {
-	s.SupplierID = uuid.New().String()
-	return
 }
 
 type Order struct {
@@ -204,4 +203,13 @@ func (ShipmentItem) TableName() string {
 func (s *ShipmentItem) BeforeCreate(tx *gorm.DB) (err error) {
 	s.ShipmentListID = uuid.New().String()
 	return
+}
+
+type ProductSupplier struct {
+	SupplierID uuid.UUID `gorm:"type:uuid;primaryKey" json:"supplier_id"`
+	ProductID  uuid.UUID `gorm:"type:uuid;primaryKey" json:"product_id"`
+}
+
+func (ProductSupplier) TableName() string {
+	return "ProductSupplier"
 }
